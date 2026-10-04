@@ -1,0 +1,18 @@
+.env
+__pycache__/
+.pytest_cache/
+.venv/
+node_modules/
+.next/
+*.pyc
+.ruff_cache/
+*.tsbuildinfo
+test-results/
+playwright-report/
+.DS_Store
+
+# Local secrets and interview source material
+.env.*
+!.env.example
+customer_materials/
+templates/

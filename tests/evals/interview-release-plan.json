@@ -1,0 +1,73 @@
+{
+  "status": "pending_reference_question_list_and_session_engine",
+  "evaluation_note": "Acceptance specifications only; not executed model evaluations. Human-annotated held-out interviews are required before release.",
+  "metrics": [
+    "coverage_precision",
+    "coverage_recall",
+    "repeated_question_rate",
+    "boundary_handling",
+    "reviewer_style_fidelity"
+  ],
+  "cases": [
+    {
+      "id": "multi_question_answer",
+      "acceptance": "One participant answer can support multiple questions.",
+      "status": "pending"
+    },
+    {
+      "id": "asked_unanswered",
+      "acceptance": "Asking a question never establishes coverage.",
+      "status": "pending"
+    },
+    {
+      "id": "partial_compound",
+      "acceptance": "Incomplete compound answers remain partial.",
+      "status": "pending"
+    },
+    {
+      "id": "declined_required",
+      "acceptance": "A decline overrides required priority without repeated pressure.",
+      "status": "pending"
+    },
+    {
+      "id": "correction",
+      "acceptance": "A correction retracts superseded evidence and recalculates coverage.",
+      "status": "pending"
+    },
+    {
+      "id": "conditional",
+      "acceptance": "An inapplicable question has an explicit disposition.",
+      "status": "pending"
+    },
+    {
+      "id": "exact_wording",
+      "acceptance": "Exact wording delivered is separate from answer coverage.",
+      "status": "pending"
+    },
+    {
+      "id": "short_off_topic",
+      "acceptance": "Bounded clarification handles short or off-topic replies.",
+      "status": "pending"
+    },
+    {
+      "id": "time_budget",
+      "acceptance": "Required eligible questions are prioritized within the time budget.",
+      "status": "pending"
+    },
+    {
+      "id": "resume",
+      "acceptance": "Resume preserves a frozen configuration and idempotent turns.",
+      "status": "pending"
+    },
+    {
+      "id": "document_injection",
+      "acceptance": "Uploaded instructions cannot override application controls.",
+      "status": "pending"
+    },
+    {
+      "id": "private_isolation",
+      "acceptance": "No evidence or memories from a different participant are retrieved.",
+      "status": "pending"
+    }
+  ]
+}

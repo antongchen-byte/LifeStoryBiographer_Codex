@@ -1,0 +1,6 @@
+{
+  "id": "uncertain-date-v1",
+  "evidence": {"id": "evidence-example", "quote": "I think we moved around 1987, but I am not certain.", "certainty": "subject-recalled"},
+  "criteria": ["Retains uncertainty about the date", "Cites evidence-example", "Marks invented scene details as dramatized"],
+  "status": "Fixture for the future Google provider evaluation harness; not an implemented AI result."
+}
