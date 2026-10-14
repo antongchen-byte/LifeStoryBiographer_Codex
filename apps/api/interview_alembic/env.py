@@ -1,5 +1,5 @@
 from alembic import context
-from app import interview_models  # noqa: F401
+from app import cinema_models, interview_models  # noqa: F401
 from app.interview_database import InterviewBase, engine
 
 with engine.connect() as connection:

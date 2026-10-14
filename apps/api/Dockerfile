@@ -1,5 +1,5 @@
 FROM python:3.12-slim
-RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg libmagic1 && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg libmagic1 libreoffice-writer libreoffice-calc libreoffice-impress fonts-dejavu-core && rm -rf /var/lib/apt/lists/*
 WORKDIR /srv
 COPY requirements.lock.txt .
 RUN pip install --no-cache-dir -r requirements.lock.txt

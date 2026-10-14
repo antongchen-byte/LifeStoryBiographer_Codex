@@ -66,7 +66,7 @@ def validate_content(path: Path, mime: str) -> str:
     elif mime.endswith("wordprocessingml.document"):
         if not zipfile.is_zipfile(path):
             raise InvalidMedia("The file content is not a Word document")
-    elif mime in {"text/plain", "text/markdown"}:
+    elif mime.startswith("text/"):
         if not detected.startswith("text/"):
             raise InvalidMedia("The file content is not text")
     return detected
@@ -197,6 +197,27 @@ def process(path: Path, mime: str, directory: Path) -> dict:
                 details["character_count"] = sum(
                     len(e.text or "") for e in root.iter() if e.tag.endswith("}t")
                 )
+        elif mime in {
+            "application/msword",
+            "application/rtf",
+            "application/vnd.ms-powerpoint",
+            "application/vnd.ms-excel",
+            "application/vnd.oasis.opendocument.text",
+            "application/vnd.oasis.opendocument.presentation",
+            "application/vnd.oasis.opendocument.spreadsheet",
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        }:
+            import shutil
+
+            from .documents import office_pdf
+            from .formats import MIME
+
+            suffix = next(ext for ext, value in MIME.items() if value == mime)
+            named = directory / ("document" + suffix)
+            shutil.copyfile(path, named)
+            converted = office_pdf(named, directory)
+            details["page_count"] = len(PdfReader(converted).pages)
         elif mime == "application/pdf":
             document = PdfReader(path)
             if document.is_encrypted:

@@ -160,6 +160,10 @@ def delete_project(
         raise DomainError(409, "This project contains an interviewer profile and its evidence")
     if interviews.scalar(select(InterviewConfig.id).where(InterviewConfig.project_id == project_id)):
         raise DomainError(409, "Delete this project's Interview Studio sessions and configurations first")
+    from .interview_models import Screenplay
+
+    if interviews.scalar(select(Screenplay.id).where(Screenplay.project_id == project_id)):
+        raise DomainError(409, "Delete this project's screenplays before deleting the project")
     db.query(AuditEvent).filter(AuditEvent.project_id == project_id).delete()
     db.delete(project)
     db.commit()
@@ -284,3 +288,15 @@ app.include_router(style_router)
 from .interview_routes import router as interview_router  # noqa: E402
 
 app.include_router(interview_router)
+
+from .screenplay_routes import router as screenplay_router  # noqa: E402
+
+app.include_router(screenplay_router)
+
+from .cinema_routes import router as cinema_router  # noqa: E402
+
+app.include_router(cinema_router)
+
+from .photo_routes import router as photo_router  # noqa: E402
+
+app.include_router(photo_router)

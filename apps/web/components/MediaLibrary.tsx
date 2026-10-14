@@ -1,4 +1,5 @@
 "use client";
+import PhotoCrop from "./PhotoCrop";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState, type ChangeEvent } from "react";
 import {
@@ -18,6 +19,34 @@ import {
 import { MediaAsset, bytes, request } from "../lib/api";
 import { Button } from "./ui/button";
 const MIME: Record<string, string> = {
+  gif: "image/gif",
+  tif: "image/tiff",
+  tiff: "image/tiff",
+  bmp: "image/bmp",
+  avif: "image/avif",
+  heif: "image/heif",
+  flac: "audio/flac",
+  ogg: "audio/ogg",
+  opus: "audio/ogg",
+  aiff: "audio/aiff",
+  aif: "audio/aiff",
+  avi: "video/x-msvideo",
+  mkv: "video/x-matroska",
+  "3gp": "video/3gpp",
+  wmv: "video/x-ms-wmv",
+  csv: "text/csv",
+  html: "text/html",
+  htm: "text/html",
+  doc: "application/msword",
+  rtf: "application/rtf",
+  odt: "application/vnd.oasis.opendocument.text",
+  ppt: "application/vnd.ms-powerpoint",
+  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  odp: "application/vnd.oasis.opendocument.presentation",
+  xls: "application/vnd.ms-excel",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  ods: "application/vnd.oasis.opendocument.spreadsheet",
+
   jpg: "image/jpeg",
   jpeg: "image/jpeg",
   png: "image/png",
@@ -454,7 +483,9 @@ export default function MediaLibrary({
       <dialog
         className="modal media-modal"
         ref={dialog}
-        onClose={() => setSelected(null)}
+        onClose={(event) => {
+          if (event.target === event.currentTarget) setSelected(null);
+        }}
       >
         {current && (
           <>
@@ -502,6 +533,17 @@ export default function MediaLibrary({
                 maxLength={5000}
               />
             </label>
+            {!readOnly &&
+              current.status === "ready" &&
+              current.mime_type.startsWith("image/") && (
+                <PhotoCrop
+                  key={current.id}
+                  scope="media"
+                  container={projectId}
+                  photoId={current.id}
+                  filename={current.original_filename}
+                />
+              )}
             <div className="modal-actions">
               {!readOnly && (
                 <Button

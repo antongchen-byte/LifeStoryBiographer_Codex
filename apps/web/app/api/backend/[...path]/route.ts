@@ -26,7 +26,14 @@ async function proxy(
   const { path } = await context.params;
   if (
     path.some((part) => !/^[a-zA-Z0-9_-]+$/.test(part)) ||
-    !["projects", "profiles", "jobs", "interviews"].includes(path[0])
+    ![
+      "projects",
+      "profiles",
+      "jobs",
+      "interviews",
+      "cinema",
+      "photos",
+    ].includes(path[0])
   )
     return NextResponse.json({ detail: "Not found" }, { status: 404 });
   // A 10,000-part manifest can exceed the normal JSON request limit.
@@ -42,11 +49,13 @@ async function proxy(
         path[0] === "interviews" &&
           path.length === 4 &&
           path[1] === "sessions" &&
-          path[3] === "turns"
+          ["turns", "finish"].includes(path[3])
           ? 18 * 1024 * 1024
-          : completesUpload
+          : path[0] === "interviews" && path[1] === "screenplays"
             ? 2 * 1024 * 1024
-            : 262144,
+            : completesUpload
+              ? 2 * 1024 * 1024
+              : 262144,
       )
     : undefined;
   if (body === null)
@@ -84,4 +93,10 @@ async function proxy(
     );
   }
 }
-export { proxy as GET, proxy as POST, proxy as PATCH, proxy as DELETE };
+export {
+  proxy as GET,
+  proxy as POST,
+  proxy as PUT,
+  proxy as PATCH,
+  proxy as DELETE,
+};

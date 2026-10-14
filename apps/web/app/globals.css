@@ -1995,3 +1995,371 @@ progress {
     animation: none;
   }
 }
+
+/* Keep the active interviewer visibly present while awaiting a reply. */
+.interview-active .avatar-flame {
+  animation: interview-flicker var(--flicker-speed) infinite alternate
+    ease-in-out;
+}
+.interview-active .interview-avatar svg {
+  animation: interviewer-breathe 4s ease-in-out infinite;
+  transform-origin: center bottom;
+}
+@keyframes interviewer-breathe {
+  50% {
+    transform: translateY(-2px) rotate(0.5deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .interview-active .avatar-flame,
+  .interview-active .interview-avatar svg {
+    animation: none;
+  }
+}
+
+/* Dedicated conversation and full-script review pages. */
+.interview-session-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+.interview-avatar-sidebar {
+  position: sticky;
+  top: 24px;
+  min-width: 0;
+}
+.interview-avatar-sidebar .interview-stage {
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px;
+  text-align: center;
+}
+.interview-avatar-sidebar .interview-stage .interview-avatar {
+  flex: initial;
+}
+.interview-avatar-sidebar small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.interview-conversation-workspace {
+  min-width: 0;
+}
+.interview-page-conversation .interview-conversation {
+  height: 55dvh;
+  min-height: 260px;
+  max-height: none;
+  margin-top: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scroll-behavior: smooth;
+}
+.interview-page-review .interview-conversation {
+  max-height: none;
+  overflow: visible;
+  margin-top: 0;
+}
+.interview-page-review .interview-turn {
+  width: 100%;
+  max-width: 100%;
+}
+@media (max-width: 760px) {
+  .interview-session-layout {
+    grid-template-columns: minmax(90px, 25%) minmax(0, 1fr);
+    gap: 10px;
+    padding: 10px;
+  }
+  .interview-avatar-sidebar {
+    top: 12px;
+  }
+  .interview-avatar-sidebar .interview-stage {
+    padding: 8px;
+  }
+  .interview-avatar-sidebar .interview-stage h2 {
+    font-size: 1rem;
+    overflow-wrap: anywhere;
+  }
+  .interview-avatar-sidebar .interview-stage h3,
+  .interview-avatar-sidebar .interview-stage small,
+  .interview-avatar-sidebar .style-help {
+    display: none;
+  }
+  .interview-avatar-sidebar audio {
+    width: 100%;
+    min-width: 0;
+  }
+  .interview-conversation-workspace .interview-toolbar label {
+    min-width: 0;
+  }
+  .interview-conversation-workspace .interview-turn {
+    max-width: 100%;
+    padding: 10px;
+  }
+  .interview-conversation-workspace button {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .interview-page-review .interview-session-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .interview-page-review .interview-avatar-sidebar {
+    position: static;
+  }
+  .interview-page-review .interview-avatar {
+    width: 90px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .interview-page-conversation .interview-conversation {
+    scroll-behavior: auto;
+  }
+}
+
+/* Keep the latest exchange and reply controls discoverable together. */
+.interview-page-conversation .interview-conversation {
+  height: clamp(180px, 32dvh, 360px);
+  min-height: 180px;
+}
+.interview-input-panel {
+  scroll-margin-top: 24px;
+}
+.interview-input-panel h3 {
+  margin-top: 12px;
+}
+.interview-input-panel textarea {
+  min-height: 72px;
+}
+.voice-help {
+  margin: 8px 0;
+}
+
+.interview-upload-dialog {
+  width: min(850px, 94vw);
+  max-height: 88dvh;
+  overflow: auto;
+  border: 1px solid #ced8c9;
+  border-radius: 18px;
+  padding: 24px;
+  color: #354e3d;
+  background: #fff;
+}
+.interview-upload-dialog::backdrop {
+  background: rgb(20 35 25 / 50%);
+}
+.interview-upload-dialog button {
+  margin: 8px 8px 8px 0;
+}
+.interview-materials {
+  margin-bottom: 16px;
+  overflow-wrap: anywhere;
+}
+.interview-materials > button {
+  margin-top: 8px;
+}
+
+.screenplay-editor {
+  overflow-wrap: anywhere;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+.screenplay-editor h1 {
+  font-size: 2.5rem;
+}
+.screenplay-editor h2 {
+  margin: 0 0 1rem;
+  font-size: 1.4rem;
+}
+.screenplay-panel {
+  background: white;
+  border: 1px solid #dbe2d4;
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin: 1.5rem 0;
+}
+.screenplay-editor label:not(.screenplay-material-choice) {
+  display: block;
+  margin: 0.8rem 0;
+}
+.screenplay-editor input:not([type="checkbox"]),
+.screenplay-editor select,
+.screenplay-editor textarea {
+  display: block;
+  width: 100%;
+  border: 1px solid #b8c6b0;
+  border-radius: 5px;
+  padding: 0.6rem;
+  background: white;
+}
+.screenplay-editor textarea {
+  resize: vertical;
+}
+.screenplay-editor button {
+  margin: 0.35rem 0.5rem 0.35rem 0;
+}
+.screenplay-editor summary {
+  cursor: pointer;
+  padding: 0.6rem 0;
+  font-weight: 600;
+}
+.screenplay-paper {
+  font-family: "Courier New", monospace;
+  font-size: 12pt;
+  line-height: 1.25;
+  padding: 2rem;
+  background: #fffefa;
+  border: 1px solid #ddd;
+  margin: 1rem 0;
+  overflow-wrap: anywhere;
+}
+.screenplay-paper p {
+  white-space: pre-wrap;
+  margin: 0 0 1em;
+}
+.screenplay-scene,
+.screenplay-character,
+.screenplay-transition {
+  text-transform: uppercase;
+}
+.screenplay-character {
+  text-align: center;
+  margin-bottom: 0 !important;
+}
+.screenplay-parenthetical {
+  margin-left: 25% !important;
+  margin-right: 25% !important;
+  margin-bottom: 0 !important;
+}
+.screenplay-dialogue {
+  margin-left: 20% !important;
+  margin-right: 20% !important;
+}
+.screenplay-transition {
+  text-align: right;
+}
+.screenplay-element-editor {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  border-bottom: 1px solid #eee;
+}
+.screenplay-element-text {
+  flex: 1;
+}
+.screenplay-content-editor {
+  border: 0;
+  padding: 0;
+  min-width: 0;
+}
+.screenplay-subsection,
+.screenplay-material {
+  border-top: 1px solid #dbe2d4;
+  padding-top: 0.8rem;
+  margin-top: 1rem;
+}
+.screenplay-material-choice {
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+  margin: 0.8rem 0;
+}
+.screenplay-uid,
+.screenplay-editor code {
+  overflow-wrap: anywhere;
+  font-size: 0.85rem;
+}
+@media (max-width: 650px) {
+  .screenplay-editor {
+    padding: 1rem;
+  }
+  .screenplay-panel {
+    padding: 1rem;
+  }
+  .screenplay-paper {
+    padding: 0.75rem;
+    font-size: 11pt;
+  }
+  .screenplay-element-editor {
+    display: block;
+  }
+}
+
+.cinema-clip {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1.5rem;
+  margin: 1.5rem 0;
+}
+.cinema-clip textarea {
+  width: 100%;
+}
+.cinema-clip video,
+.panel > video {
+  width: 100%;
+  border-radius: 12px;
+  margin: 1rem 0;
+}
+.cinema-choice {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0.75rem 0;
+}
+.cinema-choice input {
+  width: auto;
+}
+@media (max-width: 800px) {
+  .cinema-clip {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.cinema-screenplay-select {
+  display: grid;
+  gap: 0.5rem;
+  margin: 1.5rem 0;
+}
+.cinema-screenplay-select select {
+  display: block;
+  width: 100%;
+  max-width: 42rem;
+  padding: 0.75rem;
+  border: 1px solid #cfd6cc;
+  border-radius: 8px;
+  background: white;
+  color: inherit;
+}
+.cinema-clip .button,
+.panel > .button {
+  margin: 0.25rem 0.35rem 0.25rem 0;
+}
+
+.photo-crop-modal {
+  width: min(720px, 94vw);
+  max-height: 92vh;
+  overflow: auto;
+}
+.photo-crop-modal canvas {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #222;
+  margin: 1rem 0;
+}
+.photo-crop-modal img {
+  max-width: 100%;
+  max-height: 300px;
+  object-fit: contain;
+}
+.photo-crop-modal label {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.8rem 0;
+}
+.photo-crop-modal input[type="range"],
+.photo-crop-modal select {
+  width: 100%;
+}
+.photo-crop-modal .button {
+  margin: 0.3rem;
+}

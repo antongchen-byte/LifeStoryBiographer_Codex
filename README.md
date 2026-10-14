@@ -99,3 +99,9 @@ Section-generated speaker labels are not a verified identity match. The top pane
 Stopped, interrupted, and completed transcription cards provide **Delete processing & script**. The script-review page also provides **Delete script**, including for manually entered transcripts. Both require confirmation and are disabled while this profile has active processing; stop it and wait for the worker to acknowledge cancellation first.
 
 Deletion removes the working transcript, approved archive versions, searchable memory, dependent draft patterns and published style versions, the source's transcription jobs, and profile analysis history/checkpoints that may retain derived content. Other recordings and their transcripts remain. The original uploaded recording stays available for fresh transcription. Previously exported local TXT/JSON files remain on your computer and must be deleted there separately. An analysis card's **Delete processing record** removes only that job/checkpoint, retaining existing scripts and patterns. No schema migration is required.
+
+Screenplay Editor workflow, storage and querying: [docs/screenplay-editor.md](docs/screenplay-editor.md).
+
+Cinema Studio generation, review, downloads and stitching: [docs/cinema-studio.md](docs/cinema-studio.md).
+
+Photo crop and resize controls: [docs/photo-cropping.md](docs/photo-cropping.md).

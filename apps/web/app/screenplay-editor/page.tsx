@@ -1,14 +1,14 @@
-import ComingSoon from "../../components/ComingSoon";
-export default function Page() {
+import ScreenplayEditor from "../../components/ScreenplayEditor";
+export default async function Page({
+  searchParams,
+}: {
+  searchParams: Promise<{ interview?: string; screenplay?: string }>;
+}) {
+  const params = await searchParams;
   return (
-    <ComingSoon
-      title="Screenplay Editor"
-      description="Turn remembered moments into a story with shape."
-      steps={[
-        "Select a story and its sources",
-        "Craft scenes and narration",
-        "Review and approve the screenplay",
-      ]}
+    <ScreenplayEditor
+      initialInterview={params.interview}
+      initialScreenplay={params.screenplay}
     />
   );
 }

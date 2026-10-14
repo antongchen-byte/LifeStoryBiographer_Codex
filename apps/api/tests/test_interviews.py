@@ -396,3 +396,343 @@ def test_avatar_personality_is_shown_pinned_and_used(
     assert provider[0][1]["trusted_personality"] == instruction
     assert provider[0][1]["trusted_genre"] == routes.GENRES["career"]
     assert provider[0][1]["avatar_name"] == "Custom name"
+
+
+def test_start_with_greeting_records_avatar_and_genre_opening(client, owner, setup):
+    config, _ = setup
+    result = client.post(
+        "/api/interviews/sessions",
+        headers=owner,
+        json={
+            "config_id": config["id"],
+            "title": "Opening",
+            "provider_consent": True,
+            "start_with_greeting": True,
+        },
+    )
+    assert result.status_code == 201
+    data = result.json()
+    assert len(data["turns"]) == 1
+    opening = data["turns"][0]
+    assert opening["role"] == "assistant"
+    assert "I'm Ember" in opening["text"]
+    assert "time or place" in opening["text"]
+    loaded = client.get(f"/api/interviews/sessions/{data['id']}", headers=owner).json()
+    assert loaded["turns"][0]["id"] == opening["id"]
+
+
+def test_save_review_keeps_unsent_audio_without_provider(client, owner, setup, storage, provider):
+    _, sid = setup
+    raw = wav_bytes()
+    body = {
+        "draft": {
+            "request_id": "review-draft-001",
+            "audio": base64.b64encode(raw).decode(),
+            "mime": "audio/wav",
+        }
+    }
+    response = client.post(f"/api/interviews/sessions/{sid}/finish", headers=owner, json=body)
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["status"] == "review"
+    assert data["turns"][0]["has_audio"]
+    assert data["turns"][0]["state"] == "needs_transcription"
+    assert raw in storage.objects.values()
+    assert not provider
+    assert (
+        len(client.post(f"/api/interviews/sessions/{sid}/finish", headers=owner, json=body).json()["turns"])
+        == 1
+    )
+    assert (
+        client.post(
+            f"/api/interviews/sessions/{sid}/approve", headers=owner, json={"revision": data["revision"]}
+        ).status_code
+        == 422
+    )
+    assert (
+        client.post(
+            f"/api/interviews/sessions/{sid}/finish",
+            headers=owner,
+            json={"draft": {"request_id": "another-draft", "text": "New"}},
+        ).status_code
+        == 409
+    )
+
+
+def test_save_review_keeps_unsent_text(client, owner, setup, provider):
+    _, sid = setup
+    response = client.post(
+        f"/api/interviews/sessions/{sid}/finish",
+        headers=owner,
+        json={"draft": {"request_id": "review-draft-001", "text": "My final memory."}},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["turns"][0]["original_text"] == "My final memory."
+    assert not provider
+
+
+def material_asset(db, storage, project, name="article.txt"):
+    content = b"A synthetic article about the railway garden."
+    asset = MediaAsset(
+        project_id=project,
+        original_filename=name,
+        mime_type="text/plain",
+        size_bytes=len(content),
+        storage_key="original/" + name,
+        status=MediaStatus.ready,
+        ownership_declared=True,
+    )
+    db.add(asset)
+    db.commit()
+    storage.objects[asset.storage_key] = content
+    return asset
+
+
+def test_optional_upload_intent_decline_and_continuation(client, owner, setup, monkeypatch, provider):
+    _, sid = setup
+    monkeypatch.setattr(
+        routes.GeminiStyleProvider,
+        "generate",
+        lambda *args: routes.Reply(text="You can upload it or skip.", upload_intent="image"),
+    )
+    response = turn(client, owner, sid, text="I would like to upload a picture.")
+    assert response.status_code == 200, response.text
+    offer = response.json()["upload_requests"][0]
+    assert offer["status"] == "pending" and offer["kind"] == "image"
+    assert (
+        len(turn(client, owner, sid, text="I would like to upload a picture.").json()["upload_requests"]) == 1
+    )
+    other = account(client, "material-other@example.com")
+    url = f"/api/interviews/sessions/{sid}/upload-requests/{offer['id']}/decline"
+    assert client.post(url, headers=other).status_code == 404
+    assert client.post(url, headers=owner).json()["upload_requests"][0]["status"] == "declined"
+    captured = []
+
+    def reply(self, task, data, schema):
+        captured.append(data)
+        return routes.Reply(text="What happened next?")
+
+    monkeypatch.setattr(routes.GeminiStyleProvider, "generate", reply)
+    response = turn(client, owner, sid, request_id="request-0002", text="Let us continue without uploading.")
+    assert response.status_code == 200
+    assert len(response.json()["upload_requests"]) == 1
+    assert captured[0]["upload_decisions"][0]["status"] == "declined"
+
+
+def test_material_copy_approval_bundle_and_retention(
+    client, owner, project, setup, provider, db, storage, monkeypatch
+):
+    _, sid = setup
+    monkeypatch.setattr(
+        routes.GeminiStyleProvider,
+        "generate",
+        lambda *args: routes.Reply(text="Upload is optional.", upload_intent="document"),
+    )
+    response = turn(client, owner, sid, text="I want to upload an article.")
+    offer = response.json()["upload_requests"][0]["id"]
+    asset = material_asset(db, storage, project)
+    url = f"/api/interviews/sessions/{sid}/materials"
+    attached = client.post(url, headers=owner, json={"asset_ids": [asset.id], "request_id": offer})
+    assert attached.status_code == 200, attached.text
+    assert attached.json()["upload_requests"][0]["status"] == "fulfilled"
+    revision = attached.json()["revision"]
+    assert (
+        client.post(url, headers=owner, json={"asset_ids": [asset.id], "request_id": offer}).json()[
+            "revision"
+        ]
+        == revision
+    )
+    materials = client.get(url, headers=owner).json()
+    assert len(materials) == 1 and "/materials/" in materials[0]["storage_key"]
+    assert materials[0]["session_id"] == sid
+    assert materials[0]["request_id"] == offer
+    assert storage.objects[materials[0]["storage_key"]] == storage.objects[asset.storage_key]
+    assert client.post(url + "/" + materials[0]["id"] + "/skip", headers=owner).status_code == 200
+    reviewed = client.post(f"/api/interviews/sessions/{sid}/finish", headers=owner).json()
+    approved = client.post(
+        f"/api/interviews/sessions/{sid}/approve", headers=owner, json={"revision": reviewed["revision"]}
+    )
+    assert approved.status_code == 200, approved.text
+    bundle = client.get(f"/api/interviews/sessions/{sid}/bundle", headers=owner).json()
+    assert len(bundle["files"]) == 4
+    assert any(f["path"].endswith("/script.md") for f in bundle["files"])
+    exported = client.get(f"/api/interviews/sessions/{sid}/export", headers=owner).json()
+    assert exported["snapshot"]["materials"][0]["sha256"] == materials[0]["sha256"]
+    assert exported["snapshot"]["materials"][0]["session_id"] == sid
+    assert f"Interview UID: {sid}" in exported["markdown"]
+    assert f"Material UID: {materials[0]['id']}" in exported["markdown"]
+    assert f"[article.txt](../../materials/{materials[0]['id']}/article.txt)" in exported["markdown"]
+    import json
+
+    manifest_key = exported["snapshot"]["bundle"]["manifest_key"]
+    manifest = json.loads(storage.objects[manifest_key])
+    assert manifest["materials"][0]["session_id"] == manifest["session_id"] == sid
+    assert client.post(url, headers=owner, json={"asset_ids": [asset.id]}).status_code == 409
+    # Removing a library original does not delete the interview-owned copy.
+    assert client.delete(f"/api/projects/{project}/media/{asset.id}", headers=owner).status_code == 204
+    assert materials[0]["storage_key"] in storage.objects
+    assert client.delete(f"/api/interviews/sessions/{sid}", headers=owner).status_code == 204
+    assert not storage.objects
+
+
+def test_material_scope_processing_and_pending_approval(
+    client, owner, project, setup, provider, db, storage, monkeypatch
+):
+    _, sid = setup
+    monkeypatch.setattr(
+        routes.GeminiStyleProvider,
+        "generate",
+        lambda *args: routes.Reply(text="Optional upload?", upload_intent="other"),
+    )
+    response = turn(client, owner, sid, text="I can share a document.")
+    offer = response.json()["upload_requests"][0]["id"]
+    review = client.post(f"/api/interviews/sessions/{sid}/finish", headers=owner).json()
+    assert (
+        client.post(
+            f"/api/interviews/sessions/{sid}/approve", headers=owner, json={"revision": review["revision"]}
+        ).status_code
+        == 409
+    )
+    different = client.post(
+        "/api/projects", headers=owner, json={"subject_name": "Different project"}
+    ).json()["id"]
+    asset = material_asset(db, storage, different)
+    path = f"/api/interviews/sessions/{sid}/materials"
+    assert client.post(path, headers=owner, json={"asset_ids": [asset.id]}).status_code == 422
+    other = account(client, "material-reader@example.com")
+    assert client.get(path, headers=other).status_code == 404
+    assert client.get(f"/api/interviews/sessions/{sid}/bundle", headers=other).status_code == 404
+    declined = client.post(
+        f"/api/interviews/sessions/{sid}/upload-requests/{offer}/decline", headers=owner
+    ).json()
+    assert (
+        client.post(
+            f"/api/interviews/sessions/{sid}/approve", headers=owner, json={"revision": declined["revision"]}
+        ).status_code
+        == 200
+    )
+
+
+def test_material_analysis_discussion_confirmation_and_snapshot(
+    client, owner, project, setup, db, interview_db, storage, monkeypatch
+):
+    from sqlalchemy.orm import sessionmaker
+
+    from app.material_analysis import MaterialInterpretation
+    from app.workflows.material_activities import analyze_material
+
+    _, sid = setup
+    asset = material_asset(db, storage, project)
+    base = f"/api/interviews/sessions/{sid}"
+    assert client.post(base + "/materials", headers=owner, json={"asset_ids": [asset.id]}).status_code == 200
+    material = client.get(base + "/materials", headers=owner).json()[0]
+    assert material["analysis_state"] == "pending"
+    seen = []
+
+    class Provider:
+        def __init__(self, model):
+            pass
+
+        def generate(self, task, data, schema, media=None):
+            seen.append(media)
+            return MaterialInterpretation(
+                summary="An article mentions a garden.",
+                observations=["Garden"],
+                uncertainties=["The owner is unknown."],
+                question="Is this accurate, and how would you describe it?",
+            )
+
+    factory = sessionmaker(bind=interview_db.bind, expire_on_commit=False)
+    analyze_material(material["id"], 1, factory, storage, Provider)
+    assert seen[0][0]["text"] == storage.objects[asset.storage_key].decode()
+    material = client.get(base + "/materials", headers=owner).json()[0]
+    assert material["analysis_state"] == "ready" and not material["confirmation"]
+    discussed = client.post(base + "/materials/discuss", headers=owner)
+    assert discussed.status_code == 200, discussed.text
+    assert "how would you describe it" in discussed.json()["turns"][-1]["text"]
+    count = len(discussed.json()["turns"])
+    assert len(client.post(base + "/materials/discuss", headers=owner).json()["turns"]) == count
+    captured = []
+
+    def generate(self, task, data, schema, audio=None):
+        captured.append(data)
+        return routes.Reply(
+            text="What do you remember about your father's garden?",
+            material_feedback=[
+                routes.MaterialFeedback(
+                    material_id=material["id"],
+                    status="corrected",
+                    description="It was my father's garden, not mine.",
+                )
+            ],
+        )
+
+    monkeypatch.setattr(routes.GeminiStyleProvider, "generate", generate)
+    response = turn(client, owner, sid, text="It was my father's garden, not mine.")
+    assert response.status_code == 200, response.text
+    assert (
+        captured[0]["attached_materials"][0]["interpretation"]["summary"] == "An article mentions a garden."
+    )
+    updated = client.get(base + "/materials", headers=owner).json()[0]
+    assert updated["confirmation"]["status"] == "corrected"
+    assert updated["confirmation"]["user_words"] == "It was my father's garden, not mine."
+    reviewed = client.post(base + "/finish", headers=owner).json()
+    assert (
+        client.post(base + "/approve", headers=owner, json={"revision": reviewed["revision"]}).status_code
+        == 200
+    )
+    snapshot = client.get(base + "/export", headers=owner).json()["snapshot"]
+    assert snapshot["materials"][0]["analysis"]["sections"]
+    assert snapshot["materials"][0]["confirmation"]["status"] == "corrected"
+    assert client.post(base + "/materials/" + material["id"] + "/analyze", headers=owner).status_code == 409
+
+
+def test_analysis_failure_retry_skip_and_foreign_access(
+    client, owner, project, setup, db, interview_db, storage
+):
+    from sqlalchemy.orm import sessionmaker
+
+    from app.workflows.material_activities import analyze_material
+
+    _, sid = setup
+    asset = material_asset(db, storage, project)
+    base = f"/api/interviews/sessions/{sid}"
+    client.post(base + "/materials", headers=owner, json={"asset_ids": [asset.id]})
+    m = client.get(base + "/materials", headers=owner).json()[0]
+
+    class Failure:
+        def __init__(self, model):
+            raise ProviderFailure("Provider unavailable")
+
+    analyze_material(m["id"], 1, sessionmaker(bind=interview_db.bind), storage, Failure)
+    assert client.get(base + "/materials", headers=owner).json()[0]["analysis_state"] == "failed"
+    other = account(client, "analysis-other@example.com")
+    assert client.post(base + "/materials/" + m["id"] + "/analyze", headers=other).status_code == 404
+    retried = client.post(base + "/materials/" + m["id"] + "/analyze", headers=owner)
+    assert retried.json()["analysis_state"] == "pending"
+    skipped = client.post(base + "/materials/" + m["id"] + "/skip", headers=owner)
+    assert skipped.json()["analysis_state"] == "skipped"
+    # An obsolete worker may not publish or restart skipped work.
+    analyze_material(m["id"], 2, sessionmaker(bind=interview_db.bind), storage, Failure)
+    assert client.get(base + "/materials", headers=owner).json()[0]["analysis_state"] == "skipped"
+
+
+def test_materials_are_resolved_by_interview_uid_not_filename(client, owner, project, setup, db, storage):
+    config, sid = setup
+    second = client.post(
+        "/api/interviews/sessions",
+        headers=owner,
+        json={"config_id": config["id"], "title": "Another interview", "provider_consent": True},
+    ).json()["id"]
+    asset = material_asset(db, storage, project)
+    records = []
+    for session_id in [sid, second]:
+        url = f"/api/interviews/sessions/{session_id}/materials"
+        assert client.post(url, headers=owner, json={"asset_ids": [asset.id]}).status_code == 200
+        rows = client.get(url, headers=owner).json()
+        assert len(rows) == 1 and rows[0]["session_id"] == session_id
+        assert f"/{session_id}/materials/" in rows[0]["storage_key"]
+        records.append(rows[0])
+    assert records[0]["filename"] == records[1]["filename"]
+    assert records[0]["id"] != records[1]["id"]
+    assert records[0]["storage_key"] != records[1]["storage_key"]

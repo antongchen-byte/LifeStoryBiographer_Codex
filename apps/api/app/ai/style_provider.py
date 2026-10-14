@@ -65,6 +65,7 @@ def provider_error(response: httpx.Response, model: str) -> str:
     hint = {
         400: "Gemini rejected the request format or model configuration; this is not a quota diagnosis",
         401: "Check the server API key",
+        402: "Gemini API payment is required. Check the API key project in Google AI Studio Billing and replenish depleted prepaid credits. Retrying without resolving billing will not help",
         403: "Check API key restrictions and project/model permissions",
         404: "This model is unavailable for this API version or account; check GEMINI_MODEL",
         429: "Quota or rate limit reached; retry after checking project limits",
@@ -101,8 +102,16 @@ class GeminiStyleProvider:
             return httpx.post(*args, **kwargs)
         return asyncio.run(self._post_cancellable(*args, **kwargs))
 
-    def generate(self, task: str, data: dict, schema: type[BaseModel], audio: bytes | None = None):
+    def generate(
+        self,
+        task: str,
+        data: dict,
+        schema: type[BaseModel],
+        audio: bytes | None = None,
+        media: list[dict] | None = None,
+    ):
         parts = [{"text": json.dumps(data, ensure_ascii=False)}]
+        parts.extend(media or [])
         if audio is not None:
             parts.append({"inlineData": {"mimeType": "audio/mpeg", "data": base64.b64encode(audio).decode()}})
         try:
