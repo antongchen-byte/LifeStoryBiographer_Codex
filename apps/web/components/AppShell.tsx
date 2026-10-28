@@ -54,7 +54,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
         </Link>
         <div className="workspace-label">YOUR WORKSPACE</div>
         <nav aria-label="Main navigation">
-          {routes.map(({ href, label, icon: Icon, number }) => (
+          {routes.filter(route => process.env.NEXT_PUBLIC_ENABLE_FILM_STUDIOS !== "false" || !["/screenplay-editor", "/cinema-studio"].includes(route.href)).map(({ href, label, icon: Icon, number }) => (
             <Link
               key={href}
               href={href}
@@ -91,7 +91,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
           </button>
         </div>
       </aside>
-      <div className="main-column">
+      <div className="main-column" data-background={path.startsWith("/interview-studio") ? "conversation" : path.startsWith("/style-lab") ? "garden" : "memories"}>
         <header className="topbar">
           <span>YOUR STORY STARTS HERE</span>
           <a href="/" className="topbar-link">

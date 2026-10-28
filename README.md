@@ -105,3 +105,5 @@ Screenplay Editor workflow, storage and querying: [docs/screenplay-editor.md](do
 Cinema Studio generation, review, downloads and stitching: [docs/cinema-studio.md](docs/cinema-studio.md).
 
 Photo crop and resize controls: [docs/photo-cropping.md](docs/photo-cropping.md).
+
+Google Cloud deployment and operations: [docs/gcp-deployment.md](docs/gcp-deployment.md).

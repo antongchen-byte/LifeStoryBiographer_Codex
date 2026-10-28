@@ -28,7 +28,10 @@ class S3Storage:
             aws_access_key_id=settings.s3_access_key,
             aws_secret_access_key=settings.s3_secret_key,
             config=Config(
-                signature_version="s3v4", retries={"max_attempts": 3}, connect_timeout=5, read_timeout=60
+                signature_version="s3v4", retries={"max_attempts": 3}, connect_timeout=5, read_timeout=60,
+                request_checksum_calculation="when_required",
+                response_checksum_validation="when_required",
+                s3={"addressing_style": "path"},
             ),
             region_name=settings.s3_region,
         )
@@ -37,6 +40,8 @@ class S3Storage:
         self.bucket = settings.s3_bucket
 
     def encryption(self) -> dict:
+        if settings.storage_provider == "gcs":
+            return {}  # GCS encrypts objects at rest; do not send AWS SSE headers.
         return {"ServerSideEncryption": "AES256"} if settings.s3_server_side_encryption else {}
 
     def begin(self, key: str, mime: str) -> str:
@@ -86,7 +91,11 @@ class S3Storage:
                 raise
 
     def delete(self, key: str) -> None:
-        self.internal.delete_object(Bucket=self.bucket, Key=key)
+        try:
+            self.internal.delete_object(Bucket=self.bucket, Key=key)
+        except ClientError as error:
+            if error.response["Error"]["Code"] not in {"404", "NoSuchKey", "NotFound"}:
+                raise
 
     def download(self, key: str, path: Path) -> None:
         self.internal.download_file(self.bucket, key, str(path))

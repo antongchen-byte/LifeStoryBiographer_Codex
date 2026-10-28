@@ -189,6 +189,8 @@ def generate(
         raise DomainError(422, "Confirm sending the prompt and selected photos to Veo for paid generation")
     previous = None
     continuity = body.continuity
+    if body.previous_frame and body.material_ids:
+        raise DomainError(422, "Choose either the previous clip's final frame or reference photos, not both")
     if body.previous_frame:
         if index == 0:
             raise DomainError(422, "The first subsection has no previous clip")

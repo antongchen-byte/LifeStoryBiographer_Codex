@@ -155,14 +155,18 @@ function ClipEditor({
     await action(`/subsections/${unit.id}/generate`, {
       prompt: prior?.prompt ?? prompt,
       continuity: prior?.continuity ?? continuity,
-      material_ids: prior?.material_ids ?? selected,
-      material_variants: prior
-        ? (prior.material_variants ?? {})
-        : Object.fromEntries(
-            Object.entries(variants).filter(
-              ([mid]) => selected.includes(mid) && useCropped.includes(mid),
+      material_ids: (prior ? !!prior.previous_id : bridge)
+        ? []
+        : (prior?.material_ids ?? selected),
+      material_variants: (prior ? !!prior.previous_id : bridge)
+        ? {}
+        : prior
+          ? (prior.material_variants ?? {})
+          : Object.fromEntries(
+              Object.entries(variants).filter(
+                ([mid]) => selected.includes(mid) && useCropped.includes(mid),
+              ),
             ),
-          ),
       previous_frame: prior ? !!prior.previous_id : bridge,
       consent,
       expected_clip_id: clip?.id ?? null,
@@ -233,8 +237,14 @@ function ClipEditor({
             clips.
           </p>
         )}
+        {bridge && (
+          <p>
+            Using the previous clip’s final frame. Reference photos are not sent
+            in this mode. Uncheck the frame option to use photos instead.
+          </p>
+        )}
         {photos.length > 0 && (
-          <fieldset>
+          <fieldset disabled={bridge}>
             <legend>Use photos selected in Screenplay Editor (up to 3)</legend>
             {photos.map((photo) => (
               <div key={photo.id}>
@@ -292,11 +302,13 @@ function ClipEditor({
                   Use edited image (cropped / text removed) for {photo.filename}
                 </label>
                 <p className="muted">
-                  {!selected.includes(photo.id)
-                    ? "This photo is not included in the next generation."
-                    : variants[photo.id] && useCropped.includes(photo.id)
-                      ? "Next generation will use the edited image (cropped / text removed)."
-                      : "Next generation will use the original image."}
+                  {bridge
+                    ? "Not sent: previous-frame mode is selected."
+                    : !selected.includes(photo.id)
+                      ? "This photo is not included in the next generation."
+                      : variants[photo.id] && useCropped.includes(photo.id)
+                        ? "Next generation will use the edited image (cropped / text removed)."
+                        : "Next generation will use the original image."}
                   {!variants[photo.id] &&
                     " Create a cropped or text-removed copy above to enable this option."}
                 </p>

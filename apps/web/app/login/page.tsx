@@ -6,6 +6,7 @@ import { Button } from "../../components/ui/button";
 export default function Login() {
   const [register, setRegister] = useState(false),
     [busy, setBusy] = useState(false),
+    [showPassword, setShowPassword] = useState(false),
     [error, setError] = useState("");
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -93,13 +94,23 @@ export default function Login() {
           <label>
             Password
             <input
-              type="password"
+              type={showPassword ? "text" : "password"}
+              id="login-password"
               name="password"
               required
               minLength={10}
               maxLength={200}
               autoComplete={register ? "new-password" : "current-password"}
             />
+          </label>
+          <label className="password-visibility">
+            <input
+              type="checkbox"
+              checked={showPassword}
+              onChange={(event) => setShowPassword(event.target.checked)}
+              aria-controls="login-password"
+            />
+            Show password
           </label>
           {register && (
             <small className="muted">Use at least 10 characters.</small>
@@ -119,6 +130,7 @@ export default function Login() {
               type="button"
               onClick={() => {
                 setRegister(!register);
+                setShowPassword(false);
                 setError("");
               }}
             >

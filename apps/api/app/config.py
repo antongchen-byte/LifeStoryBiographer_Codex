@@ -5,6 +5,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    enable_film_studios: bool = True
+    storage_provider: str = "s3"
     gemini_api_key: str = ""
     gemini_model: str = ""
     gemini_tts_model: str = "gemini-2.5-flash-preview-tts"
@@ -38,8 +40,15 @@ class Settings(BaseSettings):
             raise ValueError("Multipart parts must be at least 5 MiB")
         if self.scanner not in {"disabled", "clamav"}:
             raise ValueError("SCANNER must be disabled or clamav")
+        if self.storage_provider not in {"s3", "gcs"}:
+            raise ValueError("Unknown storage provider")
+        if self.storage_provider == "gcs" and (
+            self.s3_endpoint != "https://storage.googleapis.com"
+            or self.s3_public_endpoint != "https://storage.googleapis.com"
+        ):
+            raise ValueError("GCS requires Google Storage HTTPS endpoints")
         if self.environment == "production":
-            if self.scanner != "clamav" or not self.s3_server_side_encryption:
+            if self.scanner != "clamav" or (self.storage_provider != "gcs" and not self.s3_server_side_encryption):
                 raise ValueError("Production requires scanning and storage encryption")
             if not self.s3_endpoint.startswith("https://") or not self.s3_public_endpoint.startswith(
                 "https://"

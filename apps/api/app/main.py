@@ -11,6 +11,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from .config import settings
 from .database import get_db
 from .domain.errors import DomainError
 from .interview_database import get_interview_db
@@ -291,11 +292,13 @@ app.include_router(interview_router)
 
 from .screenplay_routes import router as screenplay_router  # noqa: E402
 
-app.include_router(screenplay_router)
+if settings.enable_film_studios:
+    app.include_router(screenplay_router)
 
 from .cinema_routes import router as cinema_router  # noqa: E402
 
-app.include_router(cinema_router)
+if settings.enable_film_studios:
+    app.include_router(cinema_router)
 
 from .photo_routes import router as photo_router  # noqa: E402
 

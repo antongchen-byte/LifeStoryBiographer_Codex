@@ -1,6 +1,7 @@
 """Veo REST adapter: one paid submission, resumable operation polling."""
 
 import base64
+import re
 from urllib.parse import urlparse
 
 import httpx
@@ -43,10 +44,22 @@ class VeoProvider:
                 402: "Check Gemini billing and credits",
                 429: "Veo quota exhausted; retry later",
             }.get(response.status_code, "Veo is unavailable; retry later")
+            try:
+                error = response.json().get("error", {})
+                detail = error.get("message", "") if isinstance(error, dict) else ""
+            except (ValueError, AttributeError):
+                detail = ""
+            if isinstance(detail, str) and detail:
+                detail = detail.replace(self.key, "[redacted]")
+                detail = re.sub(r"AIza[\w-]+", "[redacted]", detail)
+                detail = " ".join(detail.split())[:1200]
+                explanation += f". Google detail: {detail}"
             raise VideoFailure(f"Veo HTTP {response.status_code}: {explanation}")
         return response.json()
 
     def submit(self, prompt, continuity, first_frame, references):
+        if first_frame and references:
+            raise VideoFailure("Choose either the previous clip's final frame or reference photos, not both")
         instance = {
             "prompt": "Consistent characters and environment:\n"
             + continuity

@@ -117,6 +117,7 @@ export default function InterviewStudio({
     [scripts, setScripts] = useState<Record<string, string>>({});
   const [sourceQuery, setSourceQuery] = useState(""),
     [sourceSearch, setSourceSearch] = useState("");
+  const [nameEdited, setNameEdited] = useState(false);
   const [config, setConfig] = useState(""),
     [session, setSession] = useState(sessionId),
     [title, setTitle] = useState("My life story");
@@ -665,7 +666,7 @@ export default function InterviewStudio({
                     disabled={locked}
                     onClick={() => {
                       setAvatar(kind);
-                      if (name === defaultAvatar) setName(defaultName);
+                      if (!nameEdited && name === defaultAvatar) setName(defaultName);
                     }}
                   >
                     <InterviewAvatar kind={kind} name={defaultName} />
@@ -692,7 +693,7 @@ export default function InterviewStudio({
                   <input
                     value={name}
                     maxLength={100}
-                    onChange={(e) => setName(e.target.value)}
+                    onChange={(e) => { setName(e.target.value); setNameEdited(true); }}
                   />
                 </label>
                 <label>
@@ -918,6 +919,7 @@ export default function InterviewStudio({
                   !!recordedBlob ||
                   !config ||
                   !title.trim() ||
+                  (nameEdited && !name.trim()) ||
                   !consent ||
                   !options.data?.provider_ready
                 }
@@ -930,6 +932,7 @@ export default function InterviewStudio({
                         title,
                         provider_consent: true,
                         start_with_greeting: true,
+                        interviewer_name: nameEdited ? name.trim() : undefined,
                       }),
                     );
                     cache.setQueryData(["interview", result.id], result);
@@ -1447,7 +1450,7 @@ export default function InterviewStudio({
                 </Button>
               </div>
             )}
-            {s.status !== "active" && (
+            {process.env.NEXT_PUBLIC_ENABLE_FILM_STUDIOS !== "false" && s.status !== "active" && (
               <Button
                 variant="outline"
                 onClick={() =>

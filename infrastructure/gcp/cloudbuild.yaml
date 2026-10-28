@@ -1,0 +1,21 @@
+# Run from the repository root. The Artifact Registry repository must exist.
+# gcloud builds submit --config=infrastructure/gcp/cloudbuild.yaml \
+#   --substitutions=_REGION=us-east1,_REPOSITORY=biographer,_TAG=release-001
+steps:
+  - name: gcr.io/cloud-builders/docker
+    id: api
+    args: [build, -t, '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/api:${_TAG}', apps/api]
+  - name: gcr.io/cloud-builders/docker
+    id: web
+    waitFor: ['-']
+    args: [build, --build-arg, NEXT_PUBLIC_ENABLE_FILM_STUDIOS=false, -t, '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/web:${_TAG}', apps/web]
+images:
+  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/api:${_TAG}'
+  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/web:${_TAG}'
+substitutions:
+  _REGION: us-east1
+  _REPOSITORY: biographer
+  _TAG: staging
+options:
+  logging: CLOUD_LOGGING_ONLY
+timeout: 1800s

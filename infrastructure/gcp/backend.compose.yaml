@@ -1,0 +1,60 @@
+name: biographer-cloud
+x-api: &api
+  image: us-east1-docker.pkg.dev/gen-lang-client-0362286623/biographer/api:gcp-20261025-2
+  env_file: runtime.env
+  restart: unless-stopped
+services:
+  sqlproxy:
+    image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.1
+    command: ["--address=0.0.0.0", "--port=5432", "gen-lang-client-0362286623:us-east1:biographer-db"]
+    restart: unless-stopped
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes: [redis_data:/data]
+    restart: unless-stopped
+  clamav:
+    image: clamav/clamav:stable
+    volumes: [clamav_data:/var/lib/clamav]
+    restart: unless-stopped
+  temporal:
+    image: temporalio/auto-setup:1.29.7
+    environment:
+      DB: postgres12
+      DB_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PWD: ${POSTGRES_PWD}
+      POSTGRES_SEEDS: sqlproxy
+      DBNAME: temporal
+      VISIBILITY_DBNAME: temporal_visibility
+      SKIP_DB_CREATE: 'true'
+      DEFAULT_NAMESPACE: default
+    depends_on: [sqlproxy]
+    restart: unless-stopped
+  migrate:
+    <<: *api
+    command: sh -c 'alembic upgrade head && python -m app.bootstrap_interviews'
+    restart: 'no'
+    depends_on: [sqlproxy]
+  api:
+    <<: *api
+    ports: ['10.42.0.10:8000:8000']
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      redis: {condition: service_started}
+      clamav: {condition: service_started}
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 20s
+      timeout: 5s
+      retries: 6
+  worker:
+    <<: *api
+    command: python -m app.worker
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      temporal: {condition: service_started}
+      clamav: {condition: service_started}
+volumes:
+  redis_data:
+  clamav_data:

@@ -2363,3 +2363,30 @@ progress {
 .photo-crop-modal .button {
   margin: 0.3rem;
 }
+
+/* Quiet photographic backdrops; surfaces and controls keep their existing contrast. */
+.main-column {
+  --studio-background: url('/backgrounds/memories-v1.png');
+  background-image: linear-gradient(rgba(250, 249, 246, .62), rgba(250, 249, 246, .72)), var(--studio-background);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+}
+.main-column[data-background="garden"] {
+  --studio-background: url('/backgrounds/garden-v1.png');
+}
+.main-column[data-background="conversation"] {
+  --studio-background: url('/backgrounds/conversation-v1.png');
+}
+.login-story {
+  background-image: linear-gradient(rgba(37, 78, 64, .72), rgba(37, 78, 64, .80)), url('/backgrounds/memories-v1.png');
+  background-size: cover;
+  background-position: center;
+}
+@media (max-width: 680px) {
+  .main-column { background-attachment: scroll; background-size: auto 100vh; background-position: center top; background-color: #faf9f6; }
+}
+
+.login-form .password-visibility { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; }
+.login-form .password-visibility input { margin: 0; }
