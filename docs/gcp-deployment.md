@@ -70,3 +70,12 @@ The Compute Engine VM and Cloud SQL instance continue incurring charges while pr
 - Configured Gemini conversation and TTS model metadata endpoints both returned HTTP 200 from the deployed backend.
 - No paid Gemini transcription, conversation generation, or voice output was invoked during deployment validation. Those remain subject to the project's Gemini quota and model availability.
 - Test accounts and synthetic media are removed after verification. Local user data remains untouched.
+
+## Interview template release — 2026-10-28
+
+- API/worker and web images: `interview-templates-20261028` in the existing `biographer` Artifact Registry repository.
+- Cloud Build: `fd3abe5a-a30c-49f4-9e31-a606dea69896`.
+- Cloud Run revision: `lifestory-biographer-00006-b4f` (100% traffic).
+- Adds recommended Markdown templates, a local template file picker, and user-assigned interviewer name precedence. No database migration required.
+- VM startup metadata and checked-in backend configuration use the updated API image.
+- Live verification passed: registration/login, three-module navigation, recommended catalog, multiple selections saved in configuration Markdown, assigned name, and upload control. No paid Gemini calls were made.

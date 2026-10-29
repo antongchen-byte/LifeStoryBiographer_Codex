@@ -20,7 +20,7 @@ PYSETUP
 cat > compose.yaml <<'COMPOSE'
 name: biographer-cloud
 x-api: &api
-  image: us-east1-docker.pkg.dev/gen-lang-client-0362286623/biographer/api:gcp-20261025-2
+  image: us-east1-docker.pkg.dev/gen-lang-client-0362286623/biographer/api:interview-templates-20261028
   env_file: runtime.env
   restart: unless-stopped
 services:

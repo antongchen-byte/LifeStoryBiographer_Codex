@@ -21,3 +21,9 @@ Photorealistic-natural website background for LifeStory Biographer, a reflective
 
 Photorealistic-natural website background for LifeStory Biographer interview studio, warm ivory and muted sage green palette. Single wide 16:9 photograph, 2048x1152 if possible. An inviting quiet conversation corner with two simple linen lounge chairs angled gently toward one another, small pale oak side table and one small candle, soft sheer-curtained window, a discreet leafy plant. Wide composition with furniture toward lower edges and ample plain cream plaster wall through the center and upper area suitable for website text. Gentle diffuse afternoon light, realistic materials, understated editorial interior photography, low contrast, cozy and dignified rather than luxurious. No people, text, logos, watermarks, interface, collage, or borders.
 
+## Additional local studio backgrounds
+
+Generated with the built-in image generation tool. Originals are stored here; serving copies are in `apps/web/public/backgrounds`. Both use the shared 62–72% cream overlay, sizing, and responsive behavior.
+
+- `screenplay-v1.png`: sage storyboard wall with pinned cards, storyboard sheets and connecting threads; warm ivory negative space, soft light, no plants or curtains.
+- `cinema-v1.png`: professional cinema camera, film reels and filmstrip, lenses, clapperboard, cables and studio lighting; warm ivory background with equipment around the lower edges.

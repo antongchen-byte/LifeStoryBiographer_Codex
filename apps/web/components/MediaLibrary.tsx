@@ -139,9 +139,11 @@ function AssetCard({
 export default function MediaLibrary({
   projectId,
   readOnly = false,
+  templatesOnly = false,
 }: {
   projectId: string;
   readOnly?: boolean;
+  templatesOnly?: boolean;
 }) {
   const cache = useQueryClient(),
     picker = useRef<HTMLInputElement>(null),
@@ -196,6 +198,8 @@ export default function MediaLibrary({
     try {
       for (const file of Array.from(files)) {
         if (signal.aborted) throw new DOMException("Paused", "AbortError");
+        if (templatesOnly && !/\.(md|txt|pdf|docx)$/i.test(file.name)) throw new Error("Choose a Markdown, TXT, PDF or Word .docx template.");
+        if (templatesOnly && file.size > 20 * 1024 * 1024) throw new Error("Templates must be at most 20 MiB.");
         if (!file.size) throw new Error("Files must be nonempty.");
         const mime = MIME[file.name.split(".").pop()?.toLowerCase() ?? ""];
         if (!mime) throw new Error(`Unsupported format: ${file.name}`);
@@ -377,14 +381,14 @@ export default function MediaLibrary({
           <span className="upload-symbol">
             <UploadCloud size={29} strokeWidth={1.5} />
           </span>
-          <h3>Bring your memories together</h3>
-          <p>Drop photographs, videos, recordings, or documents here.</p>
+          <h3>{templatesOnly ? "Upload your own templates" : "Bring your memories together"}</h3>
+          <p>{templatesOnly ? "Choose reference documents from your computer, or drop them here." : "Drop photographs, videos, recordings, or documents here."}</p>
           <Button
             variant="outline"
             disabled={uploading || !consent}
             onClick={() => picker.current?.click()}
           >
-            Choose files
+            {templatesOnly ? "Upload reference templates" : "Choose files"}
           </Button>
           <input
             className="sr-only"
@@ -392,14 +396,13 @@ export default function MediaLibrary({
             type="file"
             ref={picker}
             multiple
-            accept={ACCEPT}
+            accept={templatesOnly ? ".md,.txt,.pdf,.docx" : ACCEPT}
             onChange={(e: ChangeEvent<HTMLInputElement>) =>
               void upload(e.target.files)
             }
           />
           <small>
-            JPG, PNG, HEIC · MP4, MOV · MP3, WAV · PDF, DOCX and more · no
-            recording file-size cap
+            {templatesOnly ? "Markdown (.md), TXT, PDF or Word (.docx) · up to 20 MiB per template" : "JPG, PNG, HEIC · MP4, MOV · MP3, WAV · PDF, DOCX and more · no recording file-size cap"}
           </small>
           <label className="consent">
             <input

@@ -98,6 +98,11 @@ export default function InterviewStudio({
     queryKey: ["projects"],
     queryFn: () => request<Project[]>("/projects"),
   });
+  const recommendations = useQuery({
+    queryKey: ["interview-recommended-templates"],
+    queryFn: () => request<{id: string; title: string; filename: string; markdown: string}[]>("/interviews/recommended-templates"),
+  });
+  const [recommended, setRecommended] = useState<string[]>(["life-story"]);
   const configs = useQuery({
     queryKey: ["interview-configs"],
     queryFn: () => request<Config[]>("/interviews/configs"),
@@ -724,12 +729,26 @@ export default function InterviewStudio({
                 configuration and used for in-context examples and keyword-based
                 retrieval.
               </p>
-              {project && (
-                <details>
-                  <summary>Upload reference templates</summary>
-                  <MediaLibrary projectId={project} />
-                </details>
-              )}
+              <details open>
+                <summary>Select from recommended templates</summary>
+                <p>Life story is selected by default. Choose one or more, or uncheck all to use only your own references.</p>
+                {recommendations.error && <p role="alert">Unable to load recommended templates. Please refresh to try again.</p>}
+                {recommendations.isPending && <p>Loading recommended templates…</p>}
+                {recommendations.data?.map((template) => (
+                  <div className="style-panel" key={template.id}>
+                    <label className="interview-check">
+                      <input type="checkbox" disabled={locked} checked={recommended.includes(template.id)}
+                        onChange={(e) => setRecommended(e.target.checked ? [...recommended, template.id] : recommended.filter((id) => id !== template.id))} />
+                      {template.title} · {template.filename}
+                    </label>
+                    <details><summary>Preview template</summary><pre style={{whiteSpace: "pre-wrap"}}>{template.markdown}</pre></details>
+                    <Button variant="outline" onClick={() => download(template.filename, template.markdown)}>Download {template.filename}</Button>
+                  </div>
+                ))}
+              </details>
+              {project ? <MediaLibrary projectId={project} templatesOnly /> : <p>Select a biography workspace above to upload reference templates.</p>}
+              <h4>Select uploaded templates</h4>
+              <p>After processing finishes, check the documents to include in this interviewer.</p>
               <div className="interview-source-list">
                 {media.data
                   ?.filter(
@@ -831,7 +850,7 @@ export default function InterviewStudio({
                   locked ||
                   !project ||
                   !name.trim() ||
-                  assets.length > 12 ||
+                  assets.length + recommended.length > 12 ||
                   Object.keys(scripts).length > 12
                 }
                 onClick={() =>
@@ -848,6 +867,7 @@ export default function InterviewStudio({
                         name,
                         genre,
                         asset_ids: assets,
+                        recommended_template_ids: recommended,
                         scripts: Object.entries(scripts).map(
                           ([archive_id, role]) => ({ archive_id, role }),
                         ),

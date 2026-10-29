@@ -87,6 +87,7 @@ class ConfigInput(Boundary):
     avatar: Literal["flame", "female", "male"]
     name: str = Field(min_length=1, max_length=100)
     genre: Literal["life_story", "oral_history", "reflective", "documentary", "career"] = "life_story"
+    recommended_template_ids: list[str] = Field(default_factory=list, max_length=12)
     asset_ids: list[str] = Field(default_factory=list, max_length=12)
     scripts: list[SourceSelection] = Field(default_factory=list, max_length=12)
 
@@ -262,6 +263,22 @@ def options(user: Actor):
     }
 
 
+RECOMMENDED_TEMPLATES = {'life-story': 'Life story — gentle beginnings', 'family-history': 'Family and oral history', 'career-milestones': 'Career and turning points'}
+
+
+def recommended_template(template_id: str) -> dict:
+    if template_id not in RECOMMENDED_TEMPLATES:
+        raise DomainError(422, "Unknown recommended template")
+    filename = f"{template_id}.md"
+    return {"id": template_id, "title": RECOMMENDED_TEMPLATES[template_id], "filename": filename,
+            "markdown": (Path(__file__).parent / "reference_templates" / filename).read_text()}
+
+
+@router.get("/recommended-templates")
+def recommended_templates(user: Actor):
+    return [recommended_template(key) for key in RECOMMENDED_TEMPLATES]
+
+
 @router.get("/sources")
 def sources(main: DB, user: Actor, q: str = Query("", max_length=200)):
     rows = main.execute(
@@ -331,6 +348,13 @@ def configs(main: DB, db: IDB, user: Actor):
 def create_config(body: ConfigInput, main: DB, db: IDB, user: Actor, storage: Storage):
     projects.access(main, body.project_id, user, owner=True)
     materials = []
+    if len(body.asset_ids) + len(body.recommended_template_ids) > 12:
+        raise DomainError(422, "Choose at most 12 uploaded and recommended templates combined")
+    for template_id in dict.fromkeys(body.recommended_template_ids):
+        template = recommended_template(template_id)
+        materials.append({"source": template["filename"], "text": template["markdown"],
+                          "provenance": {"kind": "recommended_template", "template_id": template_id,
+                                         "sha256": hashlib.sha256(template["markdown"].encode()).hexdigest()}})
     for asset_id in dict.fromkeys(body.asset_ids):
         asset = main.scalar(
             select(MediaAsset).where(MediaAsset.id == asset_id, MediaAsset.project_id == body.project_id)
@@ -381,7 +405,7 @@ def create_config(body: ConfigInput, main: DB, db: IDB, user: Actor, storage: St
         id=new_id(),
         avatar_id=new_id(),
         owner_id=user.id,
-        **body.model_dump(exclude={"asset_ids", "scripts"}),
+        **body.model_dump(exclude={"asset_ids", "scripts", "recommended_template_ids"}),
         context={
             "schema_version": 1,
             "genre_instruction": GENRES[body.genre],

@@ -768,3 +768,25 @@ def test_assigned_name_overrides_saved_identity_without_changing_history(
         "config_id": config["id"], "title": "Invalid", "provider_consent": True,
         "interviewer_name": "   ",
     }).status_code == 422
+
+
+def test_recommended_templates_are_pinned_and_retrievable(client, owner, project, interview_db):
+    catalog = client.get('/api/interviews/recommended-templates', headers=owner)
+    assert catalog.status_code == 200
+    templates = catalog.json()
+    assert len(templates) == 3
+    assert all(t['filename'].endswith('.md') and t['markdown'].startswith('# ') for t in templates)
+    response = client.post('/api/interviews/configs', headers=owner, json={
+        'project_id': project, 'avatar': 'flame', 'name': 'Robin',
+        'recommended_template_ids': ['life-story', 'family-history', 'life-story'],
+    })
+    assert response.status_code == 201, response.text
+    config = interview_db.get(InterviewConfig, response.json()['id'])
+    assert len(config.context['materials']) == 2
+    assert config.context['materials'][0]['provenance']['kind'] == 'recommended_template'
+    assert 'life-story.md' in config.markdown
+    assert routes.retrieve(interview_db, config, 'family traditions')
+    assert client.post('/api/interviews/configs', headers=owner, json={
+        'project_id': project, 'avatar': 'flame', 'name': 'Robin',
+        'recommended_template_ids': ['../../private'],
+    }).status_code == 422

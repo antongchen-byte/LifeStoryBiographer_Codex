@@ -91,7 +91,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
           </button>
         </div>
       </aside>
-      <div className="main-column" data-background={path.startsWith("/interview-studio") ? "conversation" : path.startsWith("/style-lab") ? "garden" : "memories"}>
+      <div className="main-column" data-background={path.startsWith("/screenplay-editor") ? "screenplay" : path.startsWith("/cinema-studio") ? "cinema" : path.startsWith("/interview-studio") ? "conversation" : path.startsWith("/style-lab") ? "garden" : "memories"}>
         <header className="topbar">
           <span>YOUR STORY STARTS HERE</span>
           <a href="/" className="topbar-link">

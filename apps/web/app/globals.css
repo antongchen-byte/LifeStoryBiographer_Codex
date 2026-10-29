@@ -2390,3 +2390,6 @@ progress {
 
 .login-form .password-visibility { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; }
 .login-form .password-visibility input { margin: 0; }
+
+.main-column[data-background="screenplay"] { --studio-background: url('/backgrounds/screenplay-v1.png'); }
+.main-column[data-background="cinema"] { --studio-background: url('/backgrounds/cinema-v1.png'); }
