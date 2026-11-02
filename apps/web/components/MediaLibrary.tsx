@@ -140,10 +140,14 @@ export default function MediaLibrary({
   projectId,
   readOnly = false,
   templatesOnly = false,
+  selectedTemplateIds = [],
+  onTemplateSelection,
 }: {
   projectId: string;
   readOnly?: boolean;
   templatesOnly?: boolean;
+  selectedTemplateIds?: string[];
+  onTemplateSelection?: (ids: string[]) => void;
 }) {
   const cache = useQueryClient(),
     picker = useRef<HTMLInputElement>(null),
@@ -166,7 +170,8 @@ export default function MediaLibrary({
     queryFn: () => request<MediaAsset[]>(`/projects/${projectId}/media`),
     refetchInterval: 5000,
   });
-  const assets = media.data ?? [];
+  const assets = (media.data ?? []).filter((asset) => !templatesOnly ||
+    ["text/plain", "text/markdown", "application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"].includes(asset.mime_type));
   const current = assets.find((a) => a.id === selected?.id) ?? selected;
   const preview = useQuery({
     queryKey: ["preview", current?.id, current?.status],
@@ -363,7 +368,7 @@ export default function MediaLibrary({
       a.original_filename.toLowerCase().includes(search.toLowerCase()),
   );
   return (
-    <section>
+    <section className={templatesOnly ? "template-library" : undefined}>
       {!readOnly && (
         <div
           className={`upload-zone ${dragging ? "dragging" : ""}`}
@@ -438,7 +443,7 @@ export default function MediaLibrary({
         </p>
       )}
       <div className="library-toolbar">
-        <div className="filter-tabs" aria-label="Filter media">
+        {!templatesOnly && <div className="filter-tabs" aria-label="Filter media">
           {["all", "image", "video", "audio", "application"].map((value, i) => (
             <button
               key={value}
@@ -449,35 +454,43 @@ export default function MediaLibrary({
               {value === "all" && <span>{assets.length}</span>}
             </button>
           ))}
-        </div>
+        </div>}
         <div className="search-wrap">
           <Search size={15} />
           <input
-            aria-label="Search media"
-            placeholder="Find a memory…"
+            aria-label={templatesOnly ? "Search templates" : "Search media"}
+            placeholder={templatesOnly ? "Find a template…" : "Find a memory…"}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
       </div>
       {media.isPending ? (
-        <div className="empty-state">Loading memories…</div>
+        <div className="empty-state">{templatesOnly ? "Loading templates…" : "Loading memories…"}</div>
       ) : filtered.length ? (
-        <div className="media-grid">
+        <div className={templatesOnly ? "template-list" : "media-grid"}>
           {filtered.map((a) => (
-            <AssetCard key={a.id} asset={a} onOpen={() => open(a)} />
+            templatesOnly ? <div key={a.id} className="template-row">
+              <label className="interview-check">
+                <input type="checkbox" aria-label={`Use template ${a.original_filename}`} disabled={a.status !== "ready" || readOnly || !onTemplateSelection}
+                  checked={selectedTemplateIds.includes(a.id)}
+                  onChange={(e) => onTemplateSelection?.(e.target.checked ? [...selectedTemplateIds, a.id] : selectedTemplateIds.filter(id => id !== a.id))} />
+                <span><strong>{a.original_filename}</strong><small>{bytes(a.size_bytes)} · {a.status === "ready" ? "Ready to use" : a.status}</small></span>
+              </label>
+              <Button variant="ghost" onClick={() => open(a)}>View details</Button>
+            </div> : <AssetCard key={a.id} asset={a} onOpen={() => open(a)} />
           ))}
         </div>
       ) : (
         <div className="empty-state compact">
           <ImageIcon size={30} strokeWidth={1} />
           <h3>
-            {assets.length
+            {templatesOnly ? "Reference templates" : assets.length
               ? "No matching memories"
               : "A home for your memories"}
           </h3>
           <p>
-            {assets.length
+            {templatesOnly ? assets.length ? "Try another filename." : "No uploaded templates yet. Add a document above." : assets.length
               ? "Try a different filter or search."
               : "Your uploaded files will appear here, ready to explore."}
           </p>

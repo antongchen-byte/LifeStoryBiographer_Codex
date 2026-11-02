@@ -153,3 +153,20 @@ def test_large_recording_upload_can_start_and_resume(client, owner, project):
     assert data["part_size"] > 8 * 1024**2
     resumed = client.post(url, headers=owner, json=body).json()
     assert resumed == data
+
+
+def test_biography_description_draft_and_save(client, owner, project, monkeypatch):
+    from app.ai.style_provider import GeminiStyleProvider
+    monkeypatch.setattr(GeminiStyleProvider, "__init__", lambda self, model: None)
+    monkeypatch.setattr(GeminiStyleProvider, "generate", lambda self, task, data, schema: schema(description="A story of memories and beginnings."))
+    url = f"/api/projects/{project}"
+    assert client.post(url + "/description-draft", headers=owner).json()["description"]
+    assert client.get(url, headers=owner).json()["description"] is None
+    assert client.patch(url, headers=owner, json={"description": "My own words"}).status_code == 200
+    assert client.get(url, headers=owner).json()["description"] == "My own words"
+    assert client.patch(url, headers=owner, json={"description": "x" * 5001}).status_code == 422
+    other = account(client, "description-viewer@example.com")
+    assert client.post(url + "/description-draft", headers=other).status_code == 404
+    client.post(url + "/members", headers=owner, json={"email":"description-viewer@example.com", "role":"VIEWER"})
+    assert client.post(url + "/description-draft", headers=other).status_code == 403
+    assert client.patch(url, headers=other, json={"description":"No"}).status_code == 403

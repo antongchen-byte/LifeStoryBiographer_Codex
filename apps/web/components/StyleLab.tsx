@@ -98,7 +98,6 @@ export default function StyleLab() {
   const cache = useQueryClient();
   const { data: session } = useSession();
   const [selected, setSelected] = useState("");
-  const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
@@ -143,7 +142,6 @@ export default function StyleLab() {
         json("POST", Object.fromEntries(data)),
       );
       setSelected(p.id);
-      setCreating(false);
     }, "Interviewer profile created");
   };
   return (
@@ -156,9 +154,6 @@ export default function StyleLab() {
             Shape an interviewer who asks with care, and listens like you.
           </p>
         </div>
-        <Button onClick={() => setCreating(!creating)}>
-          <Plus size={16} /> New profile
-        </Button>
       </div>
       <div className="style-intro">
         <div className="style-intro-icon">
@@ -176,7 +171,7 @@ export default function StyleLab() {
           <LockKeyhole size={12} /> Private to you
         </span>
       </div>
-      {(creating || profiles.data?.length === 0) && (
+      {(profiles.data?.length === 0) && (
         <form className="style-panel" onSubmit={create}>
           <h2>Create an interviewer profile</h2>
           <div className="style-form-grid">

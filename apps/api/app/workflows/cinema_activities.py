@@ -10,7 +10,8 @@ from PIL import Image, ImageOps
 from sqlalchemy import select
 from temporalio import activity
 
-from ..ai.veo_provider import VeoProvider, VideoFailure
+from ..ai.omni_provider import MODEL, OmniProvider
+from ..ai.veo_provider import VideoFailure
 from ..cinema_models import CinemaJob, CinemaProduction
 from ..interview_database import SessionLocal
 from ..storage import get_storage
@@ -63,7 +64,7 @@ def run_cinema(
     identifier,
     factory=SessionLocal,
     storage=None,
-    provider_factory=VeoProvider,
+    provider_factory=OmniProvider,
     heartbeat=lambda: None,
     pause=time.sleep,
 ):
@@ -93,6 +94,8 @@ def run_cinema(
             if kind == "clip":
                 provider = provider_factory()
                 if not operation:
+                    if payload.get("model", MODEL) != MODEL:
+                        raise VideoFailure("This queued job uses the retired Veo model. Generate a new clip with Gemini Omni.")
                     refs = []
                     materials = {m["id"]: m for m in snapshot["materials"]}
                     for index, mid in enumerate(payload["material_ids"]):
@@ -113,7 +116,7 @@ def run_cinema(
                         j.state = "submitting"
                         db.commit()
                     heartbeat()
-                    operation = provider.submit(payload["prompt"], payload["continuity"], first, refs)
+                    operation = provider.submit(payload["prompt"], payload["continuity"], first, refs, payload.get("seconds", 8))
                     with factory() as db:
                         j = db.get(CinemaJob, identifier, with_for_update=True)
                         j.operation, j.state = operation, "polling"
@@ -127,7 +130,7 @@ def run_cinema(
                     pause(10)
                 if not uri:
                     raise VideoFailure(
-                        "Veo is taking longer than two hours. The operation ID is saved; use Resume generation to recover it"
+                        "Gemini video generation is taking longer than two hours. The operation ID is saved; use Resume generation to recover it"
                     )
                 provider.download(uri, output)
                 with factory() as db:

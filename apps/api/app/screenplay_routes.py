@@ -93,7 +93,7 @@ def detail(db, s):
             {
                 "id": page.id,
                 "position": page.position,
-                "seconds": 60,
+                "seconds": start or 48,
                 "content": page.content,
                 "subsections": subs,
                 "breakdown_stale": bool(subs)
@@ -224,6 +224,7 @@ def listing(main: DB, db: IDB, user: Actor):
                 "interview_uid": s.interview_uid,
                 "state": s.state,
                 "revision": s.revision,
+                "cinema_ready": s.state not in ACTIVE and any(e["revision"] == s.revision for e in s.exports),
             }
         )
     return result
@@ -253,7 +254,7 @@ def save(identifier: str, body: SaveScreenplay, main: DB, db: IDB, user: Actor):
             if not set(content.material_ids).issubset(allowed):
                 raise DomainError(422, "A section references unavailable material")
         if edit.content.elements[0].kind != "scene":
-            raise DomainError(422, "Each 60-second section must begin with a scene heading")
+            raise DomainError(422, "Each section must begin with a scene heading")
         requested = {item.id: item for item in edit.subsections}
         children_changed = any(
             sub.content != requested[sub.id].content.model_dump() or sub.seconds != requested[sub.id].seconds
@@ -307,7 +308,7 @@ class Generate(Boundary):
     revision: int
     kind: str = Field(pattern="^(draft|breakdown)$")
     sections: int = Field(default=3, ge=1, le=30)
-    seconds: int = Field(default=10)
+    seconds: int = Field(default=8)
     consent: bool = False
 
 
@@ -317,8 +318,8 @@ def generate(identifier: str, body: Generate, main: DB, db: IDB, user: Actor):
     editable(s, body.revision)
     if not body.consent:
         raise DomainError(422, "Consent to sending the reviewed source and material context to Gemini")
-    if body.seconds not in {10, 15}:
-        raise DomainError(422, "Choose 10- or 15-second subsections")
+    if body.seconds not in {4, 6, 8}:
+        raise DomainError(422, "Choose 4-, 6- or 8-second subsections")
     data = detail(db, s)
     if body.kind == "breakdown" and (not data["sections"] or data["draft_stale"]):
         raise DomainError(409, "Generate a draft from the current reviewed conversation first")
@@ -428,7 +429,7 @@ def markdown_export(data):
     ]
     for page in data["sections"]:
         lines += [
-            f"## Section {page['position']} — ~60 seconds",
+            f"## Section {page['position']} — ~{page['seconds']} seconds",
             f"Section UID: {page['id']}",
             fenced_content(page["content"]),
             "Production notes: " + page["content"]["notes"],

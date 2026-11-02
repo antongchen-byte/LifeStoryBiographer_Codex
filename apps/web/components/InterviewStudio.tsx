@@ -126,6 +126,11 @@ export default function InterviewStudio({
   const [config, setConfig] = useState(""),
     [session, setSession] = useState(sessionId),
     [title, setTitle] = useState("My life story");
+  const setupSignature = JSON.stringify({project, avatar, genre, assets, scripts, recommended});
+  const savedSetupSignature = useRef(setupSignature);
+  const [setupDirty, setSetupDirty] = useState(false);
+  useEffect(() => { savedSetupSignature.current = setupSignature; setSetupDirty(false); }, [config]);
+  useEffect(() => { setSetupDirty(!!config && setupSignature !== savedSetupSignature.current); }, [setupSignature, config]);
   const [consent, setConsent] = useState(false),
     [voice, setVoice] = useState(true),
     [text, setText] = useState("");
@@ -722,60 +727,28 @@ export default function InterviewStudio({
                 shape the style. These are AI avatars, not representations of
                 real people.
               </p>
-              <h3>Templates for style and retrieval</h3>
+              <h3>Reference templates</h3>
               <p>
-                Upload one or more TXT, Markdown, PDF or Word documents. Select
-                processed templates below. Their text is preserved in the
-                configuration and used for in-context examples and keyword-based
-                retrieval.
+                Choose recommended templates, add your own documents, or combine both to guide your interviewer.
               </p>
-              <details open>
-                <summary>Select from recommended templates</summary>
+              <details open className="template-group">
+                <summary>Select from recommended templates <span className="template-count">{recommended.length} selected</span></summary>
                 <p>Life story is selected by default. Choose one or more, or uncheck all to use only your own references.</p>
                 {recommendations.error && <p role="alert">Unable to load recommended templates. Please refresh to try again.</p>}
                 {recommendations.isPending && <p>Loading recommended templates…</p>}
                 {recommendations.data?.map((template) => (
-                  <div className="style-panel" key={template.id}>
+                  <div className="template-row" key={template.id}>
                     <label className="interview-check">
                       <input type="checkbox" disabled={locked} checked={recommended.includes(template.id)}
                         onChange={(e) => setRecommended(e.target.checked ? [...recommended, template.id] : recommended.filter((id) => id !== template.id))} />
-                      {template.title} · {template.filename}
+                      <span><strong>{template.title}</strong><small>{template.filename}</small></span>
                     </label>
-                    <details><summary>Preview template</summary><pre style={{whiteSpace: "pre-wrap"}}>{template.markdown}</pre></details>
-                    <Button variant="outline" onClick={() => download(template.filename, template.markdown)}>Download {template.filename}</Button>
+                    <details className="template-preview"><summary>Preview template</summary><pre>{template.markdown}</pre><Button variant="outline" onClick={() => download(template.filename, template.markdown)}>Download template</Button></details>
                   </div>
                 ))}
               </details>
-              {project ? <MediaLibrary projectId={project} templatesOnly /> : <p>Select a biography workspace above to upload reference templates.</p>}
-              <h4>Select uploaded templates</h4>
-              <p>After processing finishes, check the documents to include in this interviewer.</p>
-              <div className="interview-source-list">
-                {media.data
-                  ?.filter(
-                    (a) =>
-                      a.status === "ready" &&
-                      (a.mime_type.startsWith("text/") ||
-                        a.mime_type === "application/pdf" ||
-                        a.mime_type.includes("wordprocessingml")),
-                  )
-                  .map((a) => (
-                    <label key={a.id} className="interview-check">
-                      <input
-                        type="checkbox"
-                        checked={assets.includes(a.id)}
-                        onChange={(e) =>
-                          setAssets(
-                            e.target.checked
-                              ? [...assets, a.id]
-                              : assets.filter((id) => id !== a.id),
-                          )
-                        }
-                      />
-                      {a.original_filename}
-                    </label>
-                  ))}
-              </div>
-              <h3>Query saved scripts in PostgreSQL</h3>
+              {project ? <MediaLibrary projectId={project} templatesOnly readOnly={locked} selectedTemplateIds={assets} onTemplateSelection={setAssets} /> : <p>Select a biography workspace above to upload reference templates.</p>}
+              <h3>Select from saved scripts</h3>
               <form
                 className="style-attach"
                 onSubmit={(e) => {
@@ -873,6 +846,8 @@ export default function InterviewStudio({
                         ),
                       }),
                     );
+                    savedSetupSignature.current = setupSignature;
+                    setSetupDirty(false);
                     setConfig(result.id);
                     download(result.filename, result.markdown);
                   }, "Interviewer configuration saved; its Markdown file is ready in your downloads")
@@ -884,6 +859,7 @@ export default function InterviewStudio({
           )}
           <section className="style-panel">
             <h2>2. Start an interview</h2>
+            {setupDirty && <p role="status">Your interviewer settings or references have changed. Save the configuration above before starting.</p>}
             <div className="style-form-grid">
               <label>
                 Configured interviewer
@@ -938,6 +914,7 @@ export default function InterviewStudio({
                   locked ||
                   !!recordedBlob ||
                   !config ||
+                  setupDirty ||
                   !title.trim() ||
                   (nameEdited && !name.trim()) ||
                   !consent ||
@@ -956,6 +933,8 @@ export default function InterviewStudio({
                       }),
                     );
                     cache.setQueryData(["interview", result.id], result);
+                    setConfig(result.config_id);
+                    void cache.invalidateQueries({queryKey: ["interview-configs"]});
                     chooseSession(result.id, true);
                   }, "Your interviewer has started. Reply by typing or recording a voice turn.")
                 }

@@ -1,6 +1,7 @@
 export type Project = {
   id: string;
   subject_name: string;
+  description: string | null;
   title: string | null;
   status: string;
   role: string;

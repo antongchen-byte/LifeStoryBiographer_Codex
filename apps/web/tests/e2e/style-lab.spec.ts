@@ -47,7 +47,7 @@ test("review recording evidence, publish a style, and preserve its snapshot afte
   await expect(
     page.getByRole("heading", { name: "My biographies" }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "New biography" }).click();
+  await page.getByRole("button", { name: "Start a Biography" }).click();
   await page.getByLabel("Subject’s name").fill("Style Lab Fixture");
   await page.getByLabel("Biography title").fill("Learning to listen");
   await page

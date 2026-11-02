@@ -1,10 +1,10 @@
 "use client";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState, type FormEvent } from "react";
 import {
   ArrowRight,
-  Plus,
   BookOpen,
   Image,
   Sparkles,
@@ -14,6 +14,7 @@ import {
 import { Project, request } from "../lib/api";
 import { Button } from "../components/ui/button";
 export default function Dashboard() {
+  const router = useRouter();
   const {
     data: projects = [],
     isPending,
@@ -31,9 +32,10 @@ export default function Dashboard() {
         method: "POST",
         body: JSON.stringify(body),
       }),
-    onSuccess: () => {
+    onSuccess: (project) => {
       void client.invalidateQueries({ queryKey: ["projects"] });
       dialog.current?.close();
+      router.push(`/projects/${project.id}?new=1`);
     },
   });
   function submit(event: FormEvent<HTMLFormElement>) {
@@ -57,15 +59,7 @@ export default function Dashboard() {
           </h1>
           <p className="muted">A collection of lives, waiting to be told.</p>
         </div>
-        <Button
-          onClick={() => {
-            create.reset();
-            dialog.current?.showModal();
-          }}
-        >
-          <Plus size={17} />
-          New biography
-        </Button>
+
       </div>
       <section className="hero">
         <div>
@@ -80,8 +74,8 @@ export default function Dashboard() {
             <br />
             Build something that will be treasured for generations.
           </p>
-          <Button variant="outline" onClick={() => dialog.current?.showModal()}>
-            Start a biography <ArrowRight size={16} />
+          <Button variant="outline" onClick={() => { create.reset(); dialog.current?.showModal(); }}>
+            Start a Biography <ArrowRight size={16} />
           </Button>
         </div>
         <div className="hero-art" aria-hidden="true">
@@ -165,17 +159,9 @@ export default function Dashboard() {
           <p>
             {search
               ? "Try another name or title."
-              : "Create a biography and give your memories a home."}
+              : "Select Start a Biography above to give your memories a home."}
           </p>
-          {!search && (
-            <Button
-              variant="outline"
-              onClick={() => dialog.current?.showModal()}
-            >
-              <Plus size={16} />
-              Create a biography
-            </Button>
-          )}
+
         </div>
       )}
       <div className="gentle-note">

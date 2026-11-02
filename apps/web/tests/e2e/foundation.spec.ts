@@ -23,7 +23,7 @@ test("create an account, a biography, and a processed memory", async ({
   await expect(
     page.getByRole("heading", { name: "My biographies" }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "New biography" }).click();
+  await page.getByRole("button", { name: "Start a Biography" }).click();
   await page.getByLabel("Subject’s name").fill("Elena Martin");
   await page.getByLabel("Biography title").fill("A life of small adventures");
   await page

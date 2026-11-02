@@ -50,7 +50,7 @@ test("configure a real interviewer, then exercise voice, chat and approval UI wi
   await expect(
     page.getByRole("heading", { name: "My biographies" }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "New biography" }).click();
+  await page.getByRole("button", { name: "Start a Biography" }).click();
   await page.getByLabel("Subject’s name").fill("Interview fixture");
   await page.getByLabel("Biography title").fill("Interview fixture biography");
   await page

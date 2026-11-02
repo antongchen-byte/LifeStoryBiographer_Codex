@@ -140,7 +140,7 @@ def test_worker_generation_archive_and_stitch(client, owner, production, intervi
     calls = []
 
     class Provider:
-        def submit(self, prompt, continuity, first_frame, references):
+        def submit(self, prompt, continuity, first_frame, references, seconds=8):
             calls.append((prompt, first_frame.read_bytes() if first_frame else None, references))
             return "models/veo-3.1-generate-preview/operations/fixture"
 
@@ -245,7 +245,7 @@ def test_selected_photo_is_decoded_and_sent_as_png(
     seen = []
 
     class Provider:
-        def submit(self, prompt, continuity, first_frame, references):
+        def submit(self, prompt, continuity, first_frame, references, seconds=8):
             seen.append(references[0].read_bytes())
             assert first_frame is None and len(references) == 1
             return "models/veo-3.1-generate-preview/operations/photo"
@@ -310,3 +310,15 @@ def test_cinema_crop_reference_is_frozen_and_scoped(client, owner, production, i
     assert frozen != asset.storage_key
     assert storage.objects[frozen] == storage.objects[asset.storage_key]
     assert job["request"]["material_variants"] == {"photo": aid}
+
+
+@pytest.mark.parametrize('seconds', [4, 6, 8])
+def test_generation_freezes_subsection_duration(client, owner, source, interview_db, seconds):  # noqa: F811
+    s = run(client, owner, create(client, owner, source), interview_db)
+    s = run(client, owner, s, interview_db, 'breakdown', seconds=seconds)
+    assert client.post(f"/api/interviews/screenplays/{s['id']}/export", headers=owner).status_code == 200
+    p = client.post(f"/api/cinema/screenplays/{s['id']}", headers=owner).json()
+    response = generate(client, owner, p, 0)
+    assert response.status_code == 202, response.text
+    job = interview_db.get(CinemaJob, response.json()['units'][0]['clip']['id'])
+    assert job.request['seconds'] == seconds

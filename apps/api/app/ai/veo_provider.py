@@ -57,7 +57,11 @@ class VeoProvider:
             raise VideoFailure(f"Veo HTTP {response.status_code}: {explanation}")
         return response.json()
 
-    def submit(self, prompt, continuity, first_frame, references):
+    def submit(self, prompt, continuity, first_frame, references, seconds=8):
+        if seconds not in {4, 6, 8}:
+            raise VideoFailure("Veo clips must be 4, 6 or 8 seconds")
+        if references and seconds != 8:
+            raise VideoFailure("Veo reference photos require 8-second clips")
         if first_frame and references:
             raise VideoFailure("Choose either the previous clip's final frame or reference photos, not both")
         instance = {
@@ -78,7 +82,7 @@ class VeoProvider:
             json={
                 "instances": [instance],
                 "parameters": {
-                    "durationSeconds": 8,
+                    "durationSeconds": seconds,
                     "aspectRatio": "16:9",
                     "resolution": "720p",
                     "sampleCount": 1,

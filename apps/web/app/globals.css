@@ -2393,3 +2393,26 @@ progress {
 
 .main-column[data-background="screenplay"] { --studio-background: url('/backgrounds/screenplay-v1.png'); }
 .main-column[data-background="cinema"] { --studio-background: url('/backgrounds/cinema-v1.png'); }
+
+/* Compact document selection in Interview Studio. */
+.template-group { margin: 18px 0; padding: 16px; border: 1px solid #dedbd4; border-radius: 12px; background: rgba(255,255,255,.6); }
+.template-group > summary { cursor: pointer; font-weight: 600; }
+.template-count { font-size: 12px; font-weight: 400; margin-left: 8px; color: #68645d; }
+.template-row { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 14px 0; border-bottom: 1px solid #e5e1d9; }
+.template-row:last-child { border-bottom: 0; }
+.template-row .interview-check { flex: 1; min-width: 180px; margin: 0; align-items: flex-start; }
+.template-row .interview-check input { margin-top: 4px; flex: 0 0 auto; }
+.template-row strong { display: block; font-size: 14px; font-weight: 500; overflow-wrap: anywhere; }
+.template-row small { display: block; margin-top: 4px; color: #68645d; font-size: 12px; overflow-wrap: anywhere; }
+.template-preview { max-width: 100%; font-size: 13px; }
+.template-preview[open] { flex-basis: 100%; }
+.template-preview summary { cursor: pointer; color: #58634c; }
+.template-preview pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 300px; overflow: auto; padding: 14px; background: #f6f4ee; font-size: 12px; }
+.template-library .upload-zone { padding: 18px; text-align: left; }
+.template-library .upload-symbol { display: none; }
+.template-library .upload-zone h3 { font-size: 16px; margin-top: 0; }
+.template-library .upload-zone p { font-size: 13px; }
+.template-library .library-toolbar { margin: 14px 0 0; }
+.template-library .search-wrap { width: 100%; }
+.template-library .empty-state { padding: 20px; }
+.template-library .empty-state > svg { display: none; }

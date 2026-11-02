@@ -109,7 +109,9 @@ function ClipEditor({
   consent,
   busy,
   action,
+  onDraftChange,
 }: {
+  onDraftChange: () => void;
   unit: Unit;
   previous?: Unit;
   production: Production;
@@ -151,6 +153,7 @@ function ClipEditor({
     previous.clip.frame_ready &&
     !previous.stale;
   async function generate(same = false) {
+    if (clip?.state === "ready" && !confirm("Generate a replacement clip? This makes a new paid request and requires another review. The previous version remains saved.")) return;
     const prior = same && clip ? clip.request : null;
     await action(`/subsections/${unit.id}/generate`, {
       prompt: prior?.prompt ?? prompt,
@@ -173,12 +176,11 @@ function ClipEditor({
     });
   }
   return (
-    <article className="cinema-clip panel">
+    <article className="cinema-clip panel" onChange={onDraftChange}>
       <div>
         <h3>Subsection {label(unit)}</h3>
         <p className="muted">
-          Screenplay: {unit.seconds}s · Veo clip:{" "}
-          {clip?.duration?.toFixed(1) ?? "8"}s
+          Planned: {unit.seconds}s · {clip?.duration ? `Actual clip: ${clip.duration.toFixed(1)}s` : "No completed clip yet"}
         </p>
         <label>
           Video prompt for subsection {label(unit)}
@@ -233,7 +235,7 @@ function ClipEditor({
         )}
         {!consent && (
           <p role="status">
-            Enable the Veo consent checkbox at the top of this page to generate
+            Enable the Gemini Omni consent checkbox at the top of this page to generate
             clips.
           </p>
         )}
@@ -331,6 +333,7 @@ function ClipEditor({
             generating ||
             !consent ||
             !prompt.trim() ||
+            ![4, 6, 8].includes(unit.seconds) ||
             (bridge && !canBridge)
           }
           onClick={() => void generate()}
@@ -343,12 +346,12 @@ function ClipEditor({
           <div role="status">
             <p>
               {clip.state === "polling"
-                ? "Veo is generating your clip…"
+                ? "Gemini Omni is generating your clip…"
                 : `Video job: ${clip.state}`}
             </p>
             <progress aria-label={`Generation progress ${label(unit)}`} />
             <p className="muted">
-              You can leave this page and return. Veo does not report a
+              You can leave this page and return. Gemini Omni does not report a
               completion percentage.
             </p>
           </div>
@@ -359,7 +362,7 @@ function ClipEditor({
             disabled={busy}
             onClick={() => void action(`/clips/${clip.id}/resume`)}
           >
-            Resume generation without a new Veo request
+            Resume generation without a new Gemini Omni request
           </Button>
         )}
         {unit.stale && (
@@ -469,6 +472,17 @@ export default function CinemaStudio({
   screenplayId?: string;
 }) {
   const [selected, setSelected] = useState(screenplayId ?? "");
+  const draftEdits = useRef(new Set<string>());
+  useEffect(() => {
+    const unload = (event: BeforeUnloadEvent) => { if (draftEdits.current.size) { event.preventDefault(); event.returnValue = ""; } };
+    const navigate = (event: MouseEvent) => {
+      const link = (event.target as HTMLElement).closest?.("a[href]") as HTMLAnchorElement | null;
+      if (!draftEdits.current.size || !link || link.download || link.target === "_blank" || new URL(link.href).pathname === window.location.pathname) return;
+      if (!confirm("Leave Cinema Studio and discard unsubmitted clip edits?")) { event.preventDefault(); event.stopPropagation(); }
+    };
+    window.addEventListener("beforeunload", unload); document.addEventListener("click", navigate, true);
+    return () => { window.removeEventListener("beforeunload", unload); document.removeEventListener("click", navigate, true); };
+  }, []);
   const [production, setProduction] = useState<Production | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -479,7 +493,7 @@ export default function CinemaStudio({
     queryKey: ["screenplays"],
     queryFn: () =>
       request<
-        { id: string; title: string; revision: number; interview_uid: string }[]
+        { id: string; title: string; revision: number; interview_uid: string; cinema_ready?: boolean }[]
       >("/interviews/screenplays"),
   });
   useEffect(() => {
@@ -491,6 +505,7 @@ export default function CinemaStudio({
     setProduction(null);
     setError("");
     setSkipStitch(false);
+    setConsent(false);
     setNotice("");
     request<Production>(
       `/cinema/screenplays/${encodeURIComponent(selected)}`,
@@ -531,6 +546,8 @@ export default function CinemaStudio({
         post(body),
       );
       setProduction(value);
+      const generated = path.match(/^\/subsections\/([^/]+)\/generate$/);
+      if (generated) draftEdits.current.delete(generated[1]);
       await current.refetch();
     } catch (e) {
       setError((e as Error).message);
@@ -636,16 +653,17 @@ export default function CinemaStudio({
         <select
           value={selected}
           disabled={busy}
-          onChange={(e) => setSelected(e.target.value)}
+          onChange={(e) => { if (draftEdits.current.size && !confirm("Discard unsubmitted clip edits and switch screenplays?")) return; draftEdits.current.clear(); setSelected(e.target.value); }}
         >
           <option value="">Select a saved screenplay</option>
           {screenplays.data?.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.title} · revision {s.revision} · {s.id.slice(0, 8)}
+            <option key={s.id} value={s.id} disabled={s.cinema_ready === false}>
+              {s.title} · revision {s.revision}{s.cinema_ready === false ? " · Finish in Screenplay Editor first" : ""}
             </option>
           ))}
         </select>
       </label>
+      {!production && <p>Choose a finalized screenplay with saved video subsections. <a href="/screenplay-editor">Open Screenplay Editor</a> to prepare one.</p>}
       {screenplays.error && <p role="alert">{screenplays.error.message}</p>}
       {error && <p role="alert">{error}</p>}
       {notice && <p role="status">{notice}</p>}
@@ -663,9 +681,8 @@ export default function CinemaStudio({
             {production.revision}
           </p>
           <p>
-            Model: veo-3.1-generate-preview. Each generation produces an
-            8-second, 720p clip with audio. Your screenplay’s planned 10- or
-            15-second timing remains unchanged.
+            Model: gemini-omni-1.1-flash. Each generation produces a
+            720p clip with audio. The planned 4-, 6- or 8-second duration is requested in the prompt; actual duration may vary and is shown after generation. Legacy 10- or 15-second subsections must be rebuilt in Screenplay Editor before generating new clips.
           </p>
           <label className="cinema-choice">
             <input
@@ -673,7 +690,7 @@ export default function CinemaStudio({
               checked={consent}
               onChange={(e) => setConsent(e.target.checked)}
             />
-            I agree to send these prompts and selected photos to Veo. Each new
+            I agree to send these prompts and selected photos to Gemini Omni. Each new
             generation may incur API charges.
           </label>
           {production.units.map((unit, index) => (
@@ -685,6 +702,7 @@ export default function CinemaStudio({
               consent={consent}
               busy={busy}
               action={action}
+              onDraftChange={() => draftEdits.current.add(unit.id)}
             />
           ))}
           {production.all_approved && (
@@ -694,10 +712,10 @@ export default function CinemaStudio({
                 Save the approved collection and download it to your computer.
               </p>
               <Button
-                disabled={busy || (!!bundle && ACTIVE.includes(bundle.state))}
+                disabled={busy || bundle?.state === "ready" || (!!bundle && ACTIVE.includes(bundle.state))}
                 onClick={() => void action("/renders/bundle")}
               >
-                Save approved clips to database and archive
+                {bundle?.state === "ready" ? "Approved clip archive ready" : "Prepare approved clips for download"}
               </Button>
               {bundle && ACTIVE.includes(bundle.state) && (
                 <p role="status">Preparing your download…</p>

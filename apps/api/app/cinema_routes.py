@@ -17,7 +17,7 @@ from .screenplay_routes import access, detail, markdown_export, render_content
 
 router = APIRouter(prefix="/api/cinema", tags=["cinema"])
 ACTIVE = {"pending", "dispatched", "running", "submitting", "polling", "processing"}
-MODEL = "veo-3.1-generate-preview"
+MODEL = "gemini-omni-1.1-flash"
 
 
 def production_access(main, db, user, identifier, lock=False):
@@ -183,10 +183,13 @@ def generate(
     if index is None:
         raise DomainError(404, "Subsection not found")
     unit, current, _ = rows[index]
+    seconds = unit["seconds"]
+    if seconds not in {4, 6, 8}:
+        raise DomainError(422, "Rebuild this legacy screenplay into 4-, 6- or 8-second subsections in Screenplay Editor and save a new final revision")
     if (current and current.state in ACTIVE) or body.expected_clip_id != (current.id if current else None):
         raise DomainError(409, "This clip changed or is generating. Reload before generating again")
     if not body.consent:
-        raise DomainError(422, "Confirm sending the prompt and selected photos to Veo for paid generation")
+        raise DomainError(422, "Confirm sending the prompt and selected photos to Gemini Omni for paid generation")
     previous = None
     continuity = body.continuity
     if body.previous_frame and body.material_ids:
@@ -209,7 +212,7 @@ def generate(
         mid not in materials or not materials[mid].get("mime_type", "").startswith("image/")
         for mid in body.material_ids
     ):
-        raise DomainError(422, "Veo references must be uploaded photo materials")
+        raise DomainError(422, "Gemini Omni references must be uploaded photo materials")
     if not set(body.material_variants).issubset(body.material_ids):
         raise DomainError(422, "Crop selections must belong to selected photo references")
     variants = {}
@@ -247,7 +250,7 @@ def generate(
             "prompt": body.prompt,
             "continuity": continuity,
             "model": MODEL,
-            "seconds": 8,
+            "seconds": seconds,
             "material_ids": body.material_ids,
             "material_variants": body.material_variants,
             "reference_keys": reference_keys,

@@ -21,7 +21,7 @@ type Content = { elements: Element[]; material_ids: string[]; notes: string };
 type Subsection = {
   id: string;
   position: number;
-  seconds: 10 | 15;
+  seconds: 4 | 6 | 8 | 10 | 15;
   start_seconds: number;
   content: Content;
 };
@@ -215,7 +215,7 @@ export default function ScreenplayEditor({
   } | null>(null);
   const [consent, setConsent] = useState(false),
     [pages, setPages] = useState(3),
-    [seconds, setSeconds] = useState<10 | 15>(10);
+    [seconds, setSeconds] = useState<4 | 6 | 8>(8);
   const [selected, setSelected] = useState<string[]>([]);
   const started = useRef(false);
   const projects = useQuery({
@@ -280,6 +280,21 @@ export default function ScreenplayEditor({
       setBusy(false);
     }
   }
+  useEffect(() => {
+    if (!dirty) return;
+    const unload = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    const navigate = (event: MouseEvent) => {
+      const link = (event.target as HTMLElement).closest?.("a[href]") as HTMLAnchorElement | null;
+      if (!link || link.download || link.target === "_blank" || link.href.startsWith("blob:")) return;
+      if (new URL(link.href).pathname === window.location.pathname) return;
+      if (!confirm("Leave this page and discard unsaved screenplay edits?")) {
+        event.preventDefault(); event.stopPropagation();
+      }
+    };
+    window.addEventListener("beforeunload", unload);
+    document.addEventListener("click", navigate, true);
+    return () => { window.removeEventListener("beforeunload", unload); document.removeEventListener("click", navigate, true); };
+  }, [dirty]);
   const canSwitch = () =>
     !dirty || confirm("Discard unsaved screenplay edits and switch sources?");
   async function loadInterview(uid: string) {
@@ -731,11 +746,11 @@ export default function ScreenplayEditor({
           <section className="screenplay-panel">
             <h2>2. Draft and review the screenplay</h2>
             <p>
-              Each section targets about 60 seconds. Timing is an estimate;
+              Each section targets about 48 seconds. Timing is an estimate;
               check the pace with a read-through.
             </p>
             <label>
-              Number of 60-second sections
+              Number of 48-second sections
               <input
                 type="number"
                 min={1}
@@ -774,7 +789,7 @@ export default function ScreenplayEditor({
           </section>
           {draft.sections.map((page, pi) => (
             <section className="screenplay-panel" key={page.id}>
-              <h2>Section {page.position} · approximately 60 seconds</h2>
+              <h2>Section {page.position} · approximately {page.seconds} seconds</h2>
               <p className="screenplay-uid">Section UID: {page.id}</p>
               <div className="screenplay-paper">
                 {page.content.elements.map((element, i) => (
@@ -865,11 +880,12 @@ export default function ScreenplayEditor({
                   disabled={locked}
                   value={seconds}
                   onChange={(e) =>
-                    setSeconds(Number(e.target.value) as 10 | 15)
+                    setSeconds(Number(e.target.value) as 4 | 6 | 8)
                   }
                 >
-                  <option value={10}>10 seconds · 6 per section</option>
-                  <option value={15}>15 seconds · 4 per section</option>
+                  <option value={4}>4 seconds per section - 12 sections</option>
+                  <option value={6}>6 seconds per section - 8 sections</option>
+                  <option value={8}>8 seconds per section - 6 sections</option>
                 </select>
               </label>
               <Button

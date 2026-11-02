@@ -5,6 +5,7 @@ import { useRef, useState, type FormEvent } from "react";
 import { ArrowLeft, Settings2, Images, X } from "lucide-react";
 import { Project, request } from "../lib/api";
 import MediaLibrary from "./MediaLibrary";
+import BiographyDescription from "./BiographyDescription";
 import { Button } from "./ui/button";
 export default function ProjectWorkspace({ id }: { id: string }) {
   const { data: project, error } = useQuery({
@@ -66,6 +67,7 @@ export default function ProjectWorkspace({ id }: { id: string }) {
           </Button>
         )}
       </div>
+      <BiographyDescription key={id} project={project} />
       <div className="workspace-tabs">
         <span>
           <Images size={17} />

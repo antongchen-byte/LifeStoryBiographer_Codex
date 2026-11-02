@@ -45,32 +45,32 @@ class DraftOutput(Boundary):
 
 
 class BreakdownOutput(Boundary):
-    subsections: list[Content] = Field(min_length=4, max_length=6)
+    subsections: list[Content] = Field(min_length=6, max_length=12)
 
 
 class SubsectionEdit(Boundary):
     id: str
-    seconds: Literal[10, 15]
+    seconds: Literal[4, 6, 8, 10, 15]
     content: Content
 
 
 class SectionContent(Content):
-    # A section can contain all six independently edited subsections.
-    elements: list[Element] = Field(min_length=1, max_length=301)
-    material_ids: list[str] = Field(default_factory=list, max_length=350)
+    # A section can contain all twelve independently edited subsections.
+    elements: list[Element] = Field(min_length=1, max_length=601)
+    material_ids: list[str] = Field(default_factory=list, max_length=1250)
 
 
 class SectionEdit(Boundary):
     id: str
     content: SectionContent
-    subsections: list[SubsectionEdit] = Field(default_factory=list, max_length=6)
+    subsections: list[SubsectionEdit] = Field(default_factory=list, max_length=12)
 
     @model_validator(mode="after")
     def duration(self):
         if self.subsections and (
-            sum(s.seconds for s in self.subsections) != 60 or len({s.seconds for s in self.subsections}) != 1
+            sum(s.seconds for s in self.subsections) != (60 if self.subsections[0].seconds in {10, 15} else 48) or len({s.seconds for s in self.subsections}) != 1
         ):
-            raise ValueError("Use six 10-second or four 15-second subsections per section")
+            raise ValueError("Use twelve 4-second, eight 6-second or six 8-second subsections per 48-second section")
         return self
 
 

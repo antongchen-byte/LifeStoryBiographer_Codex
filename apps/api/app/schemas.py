@@ -37,12 +37,14 @@ class LoginRead(BaseModel):
 
 
 class ProjectCreate(Boundary):
+    description: str | None = Field(default=None, max_length=5000)
     subject_name: str = Field(min_length=1, max_length=200)
     title: str | None = Field(default=None, max_length=250)
     default_language: str = Field(default="en", min_length=2, max_length=16)
 
 
 class ProjectUpdate(Boundary):
+    description: str | None = Field(default=None, max_length=5000)
     subject_name: str | None = Field(default=None, min_length=1, max_length=200)
     title: str | None = Field(default=None, max_length=250)
     status: ProjectStatus | None = None

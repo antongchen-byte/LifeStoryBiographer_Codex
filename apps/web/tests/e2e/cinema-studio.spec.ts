@@ -42,7 +42,7 @@ test("Cinema generation, review, continuity and final save", async ({
       id: `unit-${n}`,
       position: n,
       section_position: 1,
-      seconds: 10,
+      seconds: 8,
       prompt: `A gardener walks through gate ${n}.`,
       stale: false,
       clip: null,
@@ -183,7 +183,7 @@ test("Cinema generation, review, continuity and final save", async ({
   await cards.nth(1).getByRole("button", { name: "Yes, satisfied" }).click();
   await page
     .getByRole("button", {
-      name: "Save approved clips to database and archive",
+      name: "Prepare approved clips for download",
     })
     .click();
   await expect(

@@ -70,3 +70,20 @@ def test_google_error_detail_is_preserved_without_key(monkeypatch):
         provider.api("POST", "/test")
     assert "Invalid image parameter" in str(caught.value)
     assert provider.key not in str(caught.value)
+
+
+@pytest.mark.parametrize('seconds', [4, 6, 8])
+def test_selected_duration_reaches_veo(seconds):
+    provider = object.__new__(VeoProvider)
+    provider.api = Mock(return_value={'name': 'models/veo-3.1-generate-preview/operations/test'})
+    provider.submit('Action', 'Context', None, [], seconds)
+    assert provider.api.call_args.kwargs['json']['parameters']['durationSeconds'] == seconds
+
+
+@pytest.mark.parametrize('seconds', [4, 6])
+def test_short_reference_clips_rejected_before_paid_call(seconds, tmp_path):
+    provider = object.__new__(VeoProvider)
+    provider.api = Mock()
+    with pytest.raises(VideoFailure, match='8-second'):
+        provider.submit('Action', 'Context', None, [tmp_path / 'photo'], seconds)
+    provider.api.assert_not_called()

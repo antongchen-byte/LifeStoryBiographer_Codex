@@ -53,6 +53,7 @@ class Project(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     subject_name: Mapped[str] = mapped_column(String(200))
     title: Mapped[str | None] = mapped_column(String(250))
+    description: Mapped[str | None] = mapped_column(Text)
     default_language: Mapped[str] = mapped_column(String(16), default="en")
     status: Mapped[ProjectStatus] = mapped_column(Enum(ProjectStatus), default=ProjectStatus.intake)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)

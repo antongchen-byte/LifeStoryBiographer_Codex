@@ -34,7 +34,7 @@ class Provider:
         if schema is DraftOutput:
             return DraftOutput(sections=[content()])
         return BreakdownOutput(
-            subsections=[content(f"Garden detail {i}.") for i in range(6 if "6 consecutive" in task else 4)]
+            subsections=[content(f"Garden detail {i}.") for i in range(48 // data["seconds"])]
         )
 
 
@@ -71,7 +71,7 @@ def create(client, owner, source):
     return response.json()
 
 
-def run(client, owner, state, interview_db, kind="draft", seconds=10, provider=Provider):
+def run(client, owner, state, interview_db, kind="draft", seconds=8, provider=Provider):
     response = client.post(
         BASE + "/" + state["id"] + "/generate",
         headers=owner,
@@ -112,7 +112,7 @@ def save_payload(s):
     }
 
 
-@pytest.mark.parametrize("seconds,count", [(10, 6), (15, 4)])
+@pytest.mark.parametrize("seconds,count", [(4, 12), (6, 8), (8, 6)])
 def test_edit_generate_breakdown_export_reload(client, owner, source, interview_db, storage, seconds, count):
     s = create(client, owner, source)
     assert s["interview_uid"] == source and "garden" in s["reviewed_markdown"]
@@ -121,11 +121,11 @@ def test_edit_generate_breakdown_export_reload(client, owner, source, interview_
     saved = client.put(BASE + "/" + s["id"], headers=owner, json=payload)
     assert saved.status_code == 200, saved.text
     s = run(client, owner, saved.json(), interview_db)
-    assert len(s["sections"]) == 1 and s["sections"][0]["seconds"] == 60
+    assert len(s["sections"]) == 1 and s["sections"][0]["seconds"] == 48
     s = run(client, owner, s, interview_db, "breakdown", seconds)
     subs = s["sections"][0]["subsections"]
-    assert len(subs) == count and sum(u["seconds"] for u in subs) == 60
-    assert [u["start_seconds"] for u in subs] == list(range(0, 60, seconds))
+    assert len(subs) == count and sum(u["seconds"] for u in subs) == 48
+    assert [u["start_seconds"] for u in subs] == list(range(0, 48, seconds))
     assert all(u["interview_uid"] == source and u["section_id"] == s["sections"][0]["id"] for u in subs)
     payload = save_payload(s)
     payload["sections"][0]["subsections"][0]["content"]["elements"][1]["text"] = (

@@ -140,7 +140,7 @@ test("load interview and Markdown, edit screenplay and timed subsections, export
             {
               id: "section-1",
               position: 1,
-              seconds: 60,
+              seconds: 48,
               content: content(),
               subsections: [],
               breakdown_stale: false,
@@ -148,7 +148,7 @@ test("load interview and Markdown, edit screenplay and timed subsections, export
           ];
         } else {
           state.sections[0].subsections = Array.from(
-            { length: 60 / body.seconds },
+            { length: 48 / body.seconds },
             (_, i) => ({
               id: `sub-${i}`,
               position: i + 1,
@@ -186,13 +186,13 @@ test("load interview and Markdown, edit screenplay and timed subsections, export
       await route.fulfill({ json: state });
     },
   );
-  await page.getByLabel("Number of 60-second sections").fill("1");
+  await page.getByLabel("Number of 48-second sections").fill("1");
   await page.getByLabel(/Allow Gemini to process/).check();
   await page
     .getByRole("button", { name: "Convert conversation to screenplay draft" })
     .click();
   await expect(
-    page.getByRole("heading", { name: "Section 1 · approximately 60 seconds" }),
+    page.getByRole("heading", { name: "Section 1 · approximately 48 seconds" }),
   ).toBeVisible();
   await expect(
     page.locator(".screenplay-paper .screenplay-scene").first(),
@@ -213,14 +213,14 @@ test("load interview and Markdown, edit screenplay and timed subsections, export
   await expect(
     page.getByText("Section 1 saved.", { exact: true }),
   ).toBeVisible();
-  await page.getByLabel("Subsection duration").selectOption("15");
+  await page.getByLabel("Subsection duration").selectOption("8");
   await page
     .getByRole("button", { name: "Break into video subsections" })
     .click();
   await expect(
-    page.getByText("Subsection 1.4 · 45–60s", { exact: true }),
+    page.getByText("Subsection 1.6 · 40–48s", { exact: true }),
   ).toBeVisible();
-  await page.getByText("Subsection 1.1 · 0–15s", { exact: true }).click();
+  await page.getByText("Subsection 1.1 · 0–8s", { exact: true }).click();
   await page
     .getByLabel("Subsection 1.1 element 2 text", { exact: true })
     .fill("A HAND holds the family photograph.");
@@ -241,7 +241,7 @@ test("load interview and Markdown, edit screenplay and timed subsections, export
   expect(text).toContain(session);
   expect(text).toContain("A HAND holds");
   await page.reload();
-  await page.getByText("Subsection 1.1 · 0–15s", { exact: true }).click();
+  await page.getByText("Subsection 1.1 · 0–8s", { exact: true }).click();
   await expect(
     page.getByLabel("Subsection 1.1 element 2 text", { exact: true }),
   ).toHaveValue("A HAND holds the family photograph.");
