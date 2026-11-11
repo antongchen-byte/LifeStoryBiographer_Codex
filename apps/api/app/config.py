@@ -6,6 +6,13 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     enable_film_studios: bool = True
+    film_studios_editor_only: bool = False
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""
+    notification_base_url: str = ""
     storage_provider: str = "s3"
     gemini_api_key: str = ""
     gemini_model: str = ""

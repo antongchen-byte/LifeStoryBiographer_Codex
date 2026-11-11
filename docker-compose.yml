@@ -3,6 +3,8 @@ x-backend: &backend
   image: lifestory-biographer-api:local
   build: ./apps/api
   env_file: .env
+  volumes:
+    - ./templates:/srv/templates:ro
   restart: unless-stopped
 services:
   postgres:

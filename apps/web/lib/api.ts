@@ -28,9 +28,13 @@ export type MediaAsset = {
   created_at: string;
 };
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const selected = typeof window !== "undefined" ? sessionStorage.getItem("production-project") : null;
+  const workspace = typeof window !== "undefined" ? sessionStorage.getItem("working-project") : null;
+  const context: Record<string,string> = selected && path !== "/production/me" && !path.startsWith("/production/projects?") && path !== "/production/projects"
+    ? {"X-Production-Project": JSON.parse(selected).id as string} : workspace && !path.startsWith("/production/") ? {"X-Workspace-Project":JSON.parse(workspace).id as string} : {};
   const response = await fetch(`/api/backend${path}`, {
     ...init,
-    headers: { "Content-Type": "application/json", ...init?.headers },
+    headers: { "Content-Type": "application/json", ...context, ...init?.headers },
   });
   if (!response.ok) {
     if (response.status === 401 && typeof window !== "undefined")

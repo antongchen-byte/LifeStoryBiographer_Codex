@@ -31,11 +31,11 @@ Open **http://localhost:3000**, create an account, and choose **New biography**.
 - Optional server-side Gemini transcription and style analysis through checkpointed Temporal jobs, adapted from VocalExtract-Pro’s sequential audio segmentation.
 - PostgreSQL/pgvector migrations, Redis authentication throttling, a database dispatch record, and Temporal workflows with bounded retries.
 
-Audio/video recordings have no application-level file-size cap; uploads use adaptive multipart chunks within storage-service limits and available disk space. Images/documents retain their existing 2 GiB upload limit; audio/video duration is limited to four hours and text documents to 20 MiB. Processing may reject damaged, encrypted, or unusually compressed documents. Style Lab can transcribe recordings with server-configured Gemini access, or accept a manually entered transcript.
+Audio/video recordings have no application-level file-size cap; uploads use adaptive multipart chunks within storage-service limits and available disk space. Images/documents retain their existing 2 GiB upload limit; audio/video duration is limited to four hours and text documents to 20 MiB. Processing may reject damaged, encrypted, or unusually compressed documents. Within each biography, Recording scripts can transcribe uploaded audio/video with server-configured Gemini access, or accept a manually entered transcript. Review, approve and save scripts there before selecting them as references in Style Lab.
 
 ## Interview Studio
 
-Open **Interview Studio** from the sidebar. Choose an avatar and genre, optionally select uploaded templates and saved Style Lab scripts, then save the interviewer configuration. Start a voice or text interview, finish for review, and approve the corrected script. New interviews are stored in the separate `biographer_interviews` PostgreSQL database. See [the Interview Studio guide](docs/interview-studio.md) for setup, voice behavior, storage, queries and limitations.
+Open **Style Lab** from the sidebar. Choose an avatar, name and genre; optionally select recommended or uploaded templates (including previous interviewer Markdown) and saved recording scripts with their speaker roles. Save the interviewer configuration, or select and preview an existing configuration, then choose **Proceed to Interview Studio**. Interview Studio focuses on starting or resuming voice/text interviews, reviewing captured scripts, approval and saving. New interviews are stored in the separate `biographer_interviews` PostgreSQL database. See [the Interview Studio guide](docs/interview-studio.md) for setup, voice behavior, storage, queries and limitations.
 
 ## Verify
 

@@ -37,6 +37,7 @@ class User(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     email: Mapped[str] = mapped_column(String(254), unique=True)
     name: Mapped[str] = mapped_column(String(200))
+    production_editor: Mapped[bool] = mapped_column(default=False, server_default="false")
     password_hash: Mapped[str] = mapped_column(String(300))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
@@ -223,3 +224,53 @@ class ConversationMemoryTurn(Base):
     start_ms: Mapped[int] = mapped_column(Integer)
     end_ms: Mapped[int] = mapped_column(Integer)
     text: Mapped[str] = mapped_column(Text)
+
+
+class ProductionRevision(Base):
+    __tablename__ = "production_revisions"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), index=True)
+    actor_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    action: Mapped[str] = mapped_column(String(300))
+    snapshot: Mapped[dict] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class ProductionRelease(Base):
+    __tablename__ = "production_releases"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), index=True)
+    owner_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    actor_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    job_id: Mapped[str] = mapped_column(String(36), unique=True)
+    title: Mapped[str] = mapped_column(String(200))
+    storage_key: Mapped[str] = mapped_column(String(700))
+    sha256: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class ProductionReview(Base):
+    """Immutable page copy shared by an editor, independent of working records."""
+    __tablename__ = "production_reviews"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
+    owner_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    actor_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    project_snapshot: Mapped[dict | None] = mapped_column(JSON)
+    working_project_id: Mapped[str | None] = mapped_column(String(36))
+    request_id: Mapped[str] = mapped_column(String(36), unique=True)
+    module: Mapped[str] = mapped_column(String(30))
+    title: Mapped[str] = mapped_column(String(200))
+    content: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class OwnerNotification(Base):
+    __tablename__ = "owner_notifications"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    event_key: Mapped[str] = mapped_column(String(200), unique=True)
+    owner_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    next_attempt_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    attempts: Mapped[int] = mapped_column(default=0)

@@ -1,5 +1,7 @@
 """Owner-scoped interview configuration, RAG, turn recording and approval."""
 
+from .services import production_context as production
+
 import base64
 import hashlib
 import io
@@ -135,7 +137,7 @@ class Reply(Boundary):
 
 def config_access(db, main, user, config_id):
     c = db.scalar(
-        select(InterviewConfig).where(InterviewConfig.id == config_id, InterviewConfig.owner_id == user.id)
+        select(InterviewConfig).where(InterviewConfig.id == config_id, InterviewConfig.owner_id == production.owner_id(user))
     )
     if not c:
         raise DomainError(404, "Interview configuration not found")
@@ -145,7 +147,7 @@ def config_access(db, main, user, config_id):
 
 def session_access(db, main, user, session_id, lock=False):
     query = select(InterviewSession).where(
-        InterviewSession.id == session_id, InterviewSession.owner_id == user.id
+        InterviewSession.id == session_id, InterviewSession.owner_id == production.owner_id(user)
     )
     s = db.scalar(query.with_for_update() if lock else query)
     if not s:
@@ -231,20 +233,24 @@ def template_text(asset, storage):
     with tempfile.TemporaryDirectory() as directory:
         path = Path(directory) / "template"
         storage.download(asset.storage_key, path)
-        if asset.mime_type.startswith("text/"):
-            text = path.read_text(encoding="utf-8-sig")
-        elif asset.mime_type == "application/pdf":
-            text = "\n".join(page.extract_text() or "" for page in PdfReader(path).pages)
-        else:
-            with zipfile.ZipFile(path) as archive:
-                member = archive.getinfo("word/document.xml")
-                if member.file_size > 20 * 1024 * 1024:
-                    raise DomainError(422, "Expanded template is too large")
-                text = " ".join(
-                    n.text or ""
-                    for n in ElementTree.fromstring(archive.read(member)).iter()
-                    if n.tag.endswith("}t")
-                )
+        return read_template_file(path, asset.mime_type)
+
+
+def read_template_file(path: Path, mime_type: str) -> str:
+    if path.stat().st_size > 20 * 1024 * 1024:
+        raise DomainError(422, "Templates must be at most 20 MiB")
+    if mime_type.startswith("text/"):
+        text = path.read_text(encoding="utf-8-sig")
+    elif mime_type == "application/pdf":
+        text = "\n".join(page.extract_text() or "" for page in PdfReader(path).pages)
+    else:
+        with zipfile.ZipFile(path) as archive:
+            member = archive.getinfo("word/document.xml")
+            if member.file_size > 20 * 1024 * 1024:
+                raise DomainError(422, "Expanded template is too large")
+            root = ElementTree.fromstring(archive.read(member))
+            text = "\n".join("".join(n.text or "" for n in paragraph.iter() if n.tag.endswith("}t"))
+                             for paragraph in root.iter() if paragraph.tag.endswith("}p"))
     if not text.strip():
         raise DomainError(422, "This template has no readable text; scanned PDFs need OCR first")
     if len(text) > 300000:
@@ -266,17 +272,50 @@ def options(user: Actor):
 RECOMMENDED_TEMPLATES = {'life-story': 'Life story — gentle beginnings', 'family-history': 'Family and oral history', 'career-milestones': 'Career and turning points'}
 
 
+# Local reference documents remain outside version control and are mounted read-only.
+LOCAL_TEMPLATE_DIR = Path("/srv/templates") if Path("/srv/templates").is_dir() else Path(__file__).resolve().parents[3] / "templates"
+TEMPLATE_TYPES = {".md": "text/markdown", ".txt": "text/plain", ".pdf": "application/pdf",
+                  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"}
+
+
+def local_template_paths():
+    if not LOCAL_TEMPLATE_DIR.is_dir():
+        return {}
+    return {"local-" + hashlib.sha256(p.name.encode()).hexdigest()[:24]: p
+            for p in sorted(LOCAL_TEMPLATE_DIR.iterdir(), key=lambda p: p.name.casefold())
+            if p.is_file() and not p.is_symlink() and not p.name.startswith((".", "~$"))
+            and p.suffix.lower() in TEMPLATE_TYPES}
+
+
 def recommended_template(template_id: str) -> dict:
-    if template_id not in RECOMMENDED_TEMPLATES:
+    if template_id in RECOMMENDED_TEMPLATES:
+        filename = f"{template_id}.md"
+        return {"id": template_id, "title": RECOMMENDED_TEMPLATES[template_id], "filename": filename,
+                "markdown": (Path(__file__).parent / "reference_templates" / filename).read_text()}
+    path = local_template_paths().get(template_id)
+    if path is None:
         raise DomainError(422, "Unknown recommended template")
-    filename = f"{template_id}.md"
-    return {"id": template_id, "title": RECOMMENDED_TEMPLATES[template_id], "filename": filename,
-            "markdown": (Path(__file__).parent / "reference_templates" / filename).read_text()}
+    try:
+        text = read_template_file(path, TEMPLATE_TYPES[path.suffix.lower()])
+    except DomainError:
+        raise
+    except Exception:
+        raise DomainError(422, "Unable to read this local template") from None
+    return {"id": template_id, "title": path.stem.replace("_", " ").strip(),
+            "filename": path.stem.strip() + ".md", "source_filename": path.name,
+            "markdown": text}
 
 
 @router.get("/recommended-templates")
 def recommended_templates(user: Actor):
-    return [recommended_template(key) for key in RECOMMENDED_TEMPLATES]
+    result = [recommended_template(key) for key in RECOMMENDED_TEMPLATES]
+    for key, path in local_template_paths().items():
+        try:
+            result.append(recommended_template(key))
+        except DomainError as exc:
+            result.append({"id": key, "title": path.stem, "filename": path.name,
+                           "markdown": "", "error": exc.message if hasattr(exc, "message") else "Unable to read template"})
+    return result
 
 
 @router.get("/sources")
@@ -284,7 +323,7 @@ def sources(main: DB, user: Actor, q: str = Query("", max_length=200)):
     rows = main.execute(
         select(TranscriptArchive, InterviewerProfile)
         .join(InterviewerProfile, TranscriptArchive.profile_id == InterviewerProfile.id)
-        .where(InterviewerProfile.owner_id == user.id, TranscriptArchive.saved_at.is_not(None))
+        .where(InterviewerProfile.owner_id == production.owner_id(user), InterviewerProfile.project_id.in_(production.project_ids(main, user)), TranscriptArchive.saved_at.is_not(None))
         .order_by(TranscriptArchive.created_at.desc())
     ).all()
     items = []
@@ -319,14 +358,7 @@ def sources(main: DB, user: Actor, q: str = Query("", max_length=200)):
 
 @router.get("/configs")
 def configs(main: DB, db: IDB, user: Actor):
-    allowed = {
-        p.id
-        for p in main.scalars(
-            select(Project)
-            .join(ProjectMember)
-            .where(ProjectMember.user_id == user.id, ProjectMember.role == "OWNER")
-        )
-    }
+    allowed = production.project_ids(main, user)
     return [
         {
             "id": c.id,
@@ -338,7 +370,7 @@ def configs(main: DB, db: IDB, user: Actor):
         }
         for c in db.scalars(
             select(InterviewConfig)
-            .where(InterviewConfig.owner_id == user.id, InterviewConfig.project_id.in_(allowed))
+            .where(InterviewConfig.owner_id == production.owner_id(user), InterviewConfig.project_id.in_(allowed))
             .order_by(InterviewConfig.created_at.desc())
         )
     ]
@@ -352,7 +384,7 @@ def create_config(body: ConfigInput, main: DB, db: IDB, user: Actor, storage: St
         raise DomainError(422, "Choose at most 12 uploaded and recommended templates combined")
     for template_id in dict.fromkeys(body.recommended_template_ids):
         template = recommended_template(template_id)
-        materials.append({"source": template["filename"], "text": template["markdown"],
+        materials.append({"source": template.get("source_filename", template["filename"]), "text": template["markdown"],
                           "provenance": {"kind": "recommended_template", "template_id": template_id,
                                          "sha256": hashlib.sha256(template["markdown"].encode()).hexdigest()}})
     for asset_id in dict.fromkeys(body.asset_ids):
@@ -377,7 +409,7 @@ def create_config(body: ConfigInput, main: DB, db: IDB, user: Actor, storage: St
     for selection in body.scripts:
         a = main.get(TranscriptArchive, selection.archive_id)
         p = main.get(InterviewerProfile, a.profile_id) if a else None
-        if not p or p.owner_id != user.id or not a.saved_at:
+        if not p or p.owner_id != production.owner_id(user) or not a.saved_at:
             raise DomainError(404, "Saved script not found")
         projects.access(main, p.project_id, user, owner=True)
         chosen = [t for t in a.snapshot["turns"] if t["role"] == selection.role]
@@ -404,7 +436,7 @@ def create_config(body: ConfigInput, main: DB, db: IDB, user: Actor, storage: St
     c = InterviewConfig(
         id=new_id(),
         avatar_id=new_id(),
-        owner_id=user.id,
+        owner_id=production.owner_id(user),
         **body.model_dump(exclude={"asset_ids", "scripts", "recommended_template_ids"}),
         context={
             "schema_version": 1,
@@ -446,7 +478,13 @@ def create_config(body: ConfigInput, main: DB, db: IDB, user: Actor, storage: St
 @router.get("/configs/{config_id}/markdown")
 def get_markdown(config_id: str, main: DB, db: IDB, user: Actor):
     c = config_access(db, main, user, config_id)
-    return {"filename": f"interviewer-{c.id}-{c.avatar_id}.md", "markdown": c.markdown}
+    provenance = [m.get("provenance", {}) for m in c.context.get("materials", [])]
+    return {"filename": f"interviewer-{c.id}-{c.avatar_id}.md", "markdown": c.markdown,
+            "configuration": {"project": c.project_id, "avatar": c.avatar, "name": c.name, "genre": c.genre,
+                "assets": list(dict.fromkeys(p["asset_id"] for p in provenance if p.get("kind") == "template")),
+                "scripts": {p["archive_id"]: p["role"] for p in provenance if p.get("kind") == "style_example"},
+                "recommended": list(dict.fromkeys(p["template_id"] for p in provenance if p.get("kind") == "recommended_template"))}}
+
 
 
 @router.delete("/configs/{config_id}", status_code=204)
@@ -471,7 +509,7 @@ def create_session(body: SessionInput, main: DB, db: IDB, user: Actor):
             # Pin the new identity without changing past sessions or source references.
             previous = c
             c = InterviewConfig(
-                id=new_id(), avatar_id=new_id(), owner_id=user.id,
+                id=new_id(), avatar_id=new_id(), owner_id=production.owner_id(user),
                 project_id=previous.project_id, avatar=previous.avatar,
                 name=assigned_name, genre=previous.genre, context=previous.context,
                 markdown="",
@@ -488,7 +526,7 @@ def create_session(body: SessionInput, main: DB, db: IDB, user: Actor):
                                       text=chunk.text, provenance=chunk.provenance))
     s = InterviewSession(
         config_id=c.id,
-        owner_id=user.id,
+        owner_id=production.owner_id(user),
         project_id=c.project_id,
         title=body.title,
         model=settings.gemini_model,
@@ -533,11 +571,12 @@ def list_sessions(main: DB, db: IDB, user: Actor):
             "title": s.title,
             "status": s.status,
             "config_id": s.config_id,
+            "project_id": s.project_id,
             "created_at": s.created_at,
         }
         for s in db.scalars(
             select(InterviewSession)
-            .where(InterviewSession.owner_id == user.id, InterviewSession.project_id.in_(allowed))
+            .where(InterviewSession.owner_id == production.owner_id(user), InterviewSession.project_id.in_(allowed))
             .order_by(InterviewSession.created_at.desc())
             .limit(100)
         )
@@ -707,7 +746,7 @@ def submit_turn(session_id: str, body: TurnInput, main: DB, db: IDB, user: Actor
             if len(raw) > 12 * 1024 * 1024:
                 raise DomainError(422, "Recorded turn exceeds 12 MiB")
             # Preserve the original audio before provider calls; failed transcription is retryable.
-            existing.audio_key = f"interviews/{user.id}/{s.id}/{body.request_id}/input"
+            existing.audio_key = f"interviews/{production.owner_id(user)}/{s.id}/{body.request_id}/input"
             existing.audio_mime = body.mime
             put_bytes(storage, existing.audio_key, raw, body.mime)
         db.add(existing)
@@ -919,7 +958,7 @@ def speak(session_id: str, turn_id: str, main: DB, db: IDB, user: Actor, storage
             audio = generate_speech(t.original_text, c.avatar)
         except ProviderFailure as error:
             raise DomainError(502, str(error)) from None
-        t.audio_key = f"interviews/{user.id}/{s.id}/{t.id}/reply.wav"
+        t.audio_key = f"interviews/{production.owner_id(user)}/{s.id}/{t.id}/reply.wav"
         t.audio_mime = "audio/wav"
         put_bytes(storage, t.audio_key, audio, t.audio_mime)
         db.commit()
@@ -984,7 +1023,7 @@ def finish(
                         raise DomainError(422, "Invalid recorded audio") from None
                     if not raw or len(raw) > 12 * 1024 * 1024:
                         raise DomainError(422, "Recorded turn must be nonempty and at most 12 MiB")
-                    turn.audio_key = f"interviews/{user.id}/{s.id}/{draft.request_id}/input"
+                    turn.audio_key = f"interviews/{production.owner_id(user)}/{s.id}/{draft.request_id}/input"
                     turn.audio_mime = draft.mime
                     put_bytes(storage, turn.audio_key, raw, draft.mime)
                 db.add(turn)
@@ -1087,7 +1126,7 @@ def approve(session_id: str, body: Revision, main: DB, db: IDB, user: Actor, sto
             for t in turns
         )
     )
-    root = f"interviews/{user.id}/{s.id}/"
+    root = f"interviews/{production.owner_id(user)}/{s.id}/"
     folder = f"{root}scripts/revision-{s.revision}/"
     snapshot["bundle"] = {
         "root": root,
@@ -1132,7 +1171,7 @@ def approve(session_id: str, body: Revision, main: DB, db: IDB, user: Actor, sto
     db.add(
         InterviewApproval(
             session_id=s.id,
-            owner_id=user.id,
+            owner_id=production.owner_id(user),
             project_id=s.project_id,
             revision=s.revision,
             snapshot=snapshot,
@@ -1171,7 +1210,7 @@ def search_approved(
 ):
     projects.access(main, project_id, user, owner=True)
     stmt = select(InterviewApproval).where(
-        InterviewApproval.owner_id == user.id, InterviewApproval.project_id == project_id
+        InterviewApproval.owner_id == production.owner_id(user), InterviewApproval.project_id == project_id
     )
     if q:
         if db.bind.dialect.name == "postgresql":
@@ -1292,7 +1331,7 @@ def attach_materials(session_id: str, body: MaterialAttach, main: DB, db: IDB, u
                 continue
             mid = new_id()
             safe_name = re.sub(r"[^a-zA-Z0-9._-]+", "_", a.original_filename).strip(".") or "material"
-            key = f"interviews/{user.id}/{s.id}/materials/{mid}/{safe_name}"
+            key = f"interviews/{production.owner_id(user)}/{s.id}/materials/{mid}/{safe_name}"
             with tempfile.TemporaryDirectory() as directory:
                 path = Path(directory) / "material"
                 storage.download(a.storage_key, path)

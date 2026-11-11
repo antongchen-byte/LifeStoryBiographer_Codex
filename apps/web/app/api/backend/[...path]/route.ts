@@ -27,6 +27,7 @@ async function proxy(
   if (
     path.some((part) => !/^[a-zA-Z0-9_-]+$/.test(part)) ||
     ![
+      "production",
       "projects",
       "profiles",
       "jobs",
@@ -51,7 +52,7 @@ async function proxy(
           path[1] === "sessions" &&
           ["turns", "finish"].includes(path[3])
           ? 18 * 1024 * 1024
-          : path[0] === "interviews" && path[1] === "screenplays"
+          : (path[0] === "production" && path[3] === "reviews") || (path[0] === "interviews" && path[1] === "screenplays")
             ? 2 * 1024 * 1024
             : completesUpload
               ? 2 * 1024 * 1024
@@ -72,6 +73,8 @@ async function proxy(
         cache: "no-store",
         headers: {
           "Content-Type": "application/json",
+          ...(request.headers.get("x-production-project") ? {"X-Production-Project":request.headers.get("x-production-project")!} : {}),
+          ...(request.headers.get("x-workspace-project") ? {"X-Workspace-Project":request.headers.get("x-workspace-project")!} : {}),
           Authorization: `Bearer ${token.backendToken}`,
         },
       },

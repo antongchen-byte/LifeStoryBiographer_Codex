@@ -1,5 +1,7 @@
 """Owner scoped video generation, review and archive endpoints."""
 
+from .services import production_context as production
+
 import tempfile
 from pathlib import Path
 
@@ -20,19 +22,45 @@ ACTIVE = {"pending", "dispatched", "running", "submitting", "polling", "processi
 MODEL = "gemini-omni-1.1-flash"
 
 
+def refresh_editor_photos(main, db, user, p):
+    if not user.production_editor:
+        return
+    from .interview_models import InterviewMaterial, InterviewSession
+    from .interview_routes import material_record
+    materials = list(p.snapshot["materials"])
+    seen = {m.get("asset_id") for m in materials}
+    candidates = [material_record(m) for m in db.scalars(
+        select(InterviewMaterial).join(InterviewSession, InterviewMaterial.session_id == InterviewSession.id)
+        .where(InterviewSession.project_id == p.snapshot["project_id"], InterviewMaterial.mime_type.like("image/%"))
+    )]
+    candidates += [{"id": a.id, "asset_id": a.id, "filename": a.original_filename,
+        "mime_type": a.mime_type, "storage_key": a.storage_key, "sha256": a.checksum_sha256}
+        for a in main.scalars(select(MediaAsset).where(
+            MediaAsset.project_id == p.snapshot["project_id"], MediaAsset.status == MediaStatus.ready,
+            MediaAsset.mime_type.like("image/%"))) if not a.details.get("crop_source")]
+    for record in candidates:
+        if record.get("asset_id") not in seen:
+            materials.append(record)
+            seen.add(record.get("asset_id"))
+    if materials != p.snapshot["materials"]:
+        p.snapshot = {**p.snapshot, "materials": materials}
+        db.flush()
+
+
 def production_access(main, db, user, identifier, lock=False):
     p = db.scalar(
         select(CinemaProduction)
-        .where(CinemaProduction.id == identifier, CinemaProduction.owner_id == user.id)
+        .where(CinemaProduction.id == identifier, CinemaProduction.owner_id == production.owner_id(user))
         .with_for_update()
         if lock
         else select(CinemaProduction).where(
-            CinemaProduction.id == identifier, CinemaProduction.owner_id == user.id
+            CinemaProduction.id == identifier, CinemaProduction.owner_id == production.owner_id(user)
         )
     )
     if not p:
         raise DomainError(404, "Cinema production not found")
     access(main, db, user, p.screenplay_id)
+    refresh_editor_photos(main, db, user, p)
     return p
 
 
@@ -95,7 +123,7 @@ def job_data(job, storage):
     }
 
 
-def view(db, p, storage):
+def view(db, p, storage, all_project_photos=False):
     rows = sequence(db, p)
     ids = [j.id for _, j, stale in rows if j and j.state == "ready" and j.approved and not stale]
     return {
@@ -105,6 +133,7 @@ def view(db, p, storage):
         "interview_uid": p.interview_uid,
         "title": p.snapshot["title"],
         "model": MODEL,
+        "all_project_photos": all_project_photos,
         "materials": [
             {"id": m["id"], "filename": m["filename"], "mime_type": m.get("mime_type", "")}
             for m in p.snapshot["materials"]
@@ -148,19 +177,23 @@ def load(identifier: str, main: DB, db: IDB, user: Actor, storage: Storage):
     if not p:
         p = CinemaProduction(
             screenplay_id=s.id,
-            owner_id=user.id,
+            owner_id=production.owner_id(user),
             interview_uid=s.interview_uid,
             source_revision=s.revision,
             snapshot=snapshot,
         )
         db.add(p)
         db.commit()
-    return view(db, p, storage)
+    refresh_editor_photos(main, db, user, p)
+    db.commit()
+    return view(db, p, storage, user.production_editor)
 
 
 @router.get("/{identifier}")
 def get(identifier: str, main: DB, db: IDB, user: Actor, storage: Storage):
-    return view(db, production_access(main, db, user, identifier), storage)
+    p = production_access(main, db, user, identifier)
+    db.commit()
+    return view(db, p, storage, user.production_editor)
 
 
 class GenerateClip(Boundary):
@@ -206,6 +239,8 @@ def generate(
         continuity = previous.request["continuity"]
     allowed = set(unit["content"]["material_ids"])
     materials = {m["id"]: m for m in p.snapshot["materials"]}
+    if user.production_editor:
+        allowed = set(materials)
     if len(set(body.material_ids)) != len(body.material_ids) or not set(body.material_ids).issubset(allowed):
         raise DomainError(422, "Choose only photos checked for this subsection in the Screenplay Editor")
     if any(
@@ -231,11 +266,12 @@ def generate(
     # Freeze selected cropped bytes with the generation attempt so later media deletion cannot alter it.
     try:
         with tempfile.TemporaryDirectory() as tmp:
-            for mid, key in variants.items():
+            for mid in body.material_ids:
+                key = variants.get(mid, materials[mid]["storage_key"])
                 path = Path(tmp) / "reference.jpg"
                 storage.download(key, path)
-                frozen = f"interviews/{user.id}/{p.interview_uid}/cinema/{p.id}/{job_id}/references/{mid}.jpg"
-                storage.put(frozen, path, "image/jpeg")
+                frozen = f"interviews/{production.owner_id(user)}/{p.interview_uid}/cinema/{p.id}/{job_id}/references/{mid}.jpg"
+                storage.put(frozen, path, "image/jpeg" if mid in variants else materials[mid]["mime_type"])
                 reference_keys[mid] = frozen
     except Exception:
         for key in reference_keys.values():
@@ -247,6 +283,7 @@ def generate(
         kind="clip",
         subsection_id=subsection,
         request={
+            "actor_id": user.id, "project_id": p.snapshot["project_id"],
             "prompt": body.prompt,
             "continuity": continuity,
             "model": MODEL,
@@ -266,7 +303,7 @@ def generate(
         for key in reference_keys.values():
             storage.delete(key)
         raise
-    return view(db, p, storage)
+    return view(db, p, storage, user.production_editor)
 
 
 class Review(Boundary):
@@ -295,7 +332,7 @@ def review(identifier: str, clip_id: str, body: Review, main: DB, db: IDB, user:
         raise DomainError(409, "Preview the current clip and resolve continuity changes before approval")
     job.approved = body.approved
     db.commit()
-    return view(db, p, storage)
+    return view(db, p, storage, user.production_editor)
 
 
 @router.post("/{identifier}/renders/{kind}", status_code=202)
@@ -321,9 +358,9 @@ def render(identifier: str, kind: str, main: DB, db: IDB, user: Actor, storage: 
         None,
     )
     if not existing:
-        db.add(CinemaJob(production_id=p.id, kind=kind, request={"clip_ids": ids}))
+        db.add(CinemaJob(production_id=p.id, kind=kind, request={"clip_ids": ids, "actor_id": user.id, "project_id": p.snapshot["project_id"]}))
         db.commit()
-    return view(db, p, storage)
+    return view(db, p, storage, user.production_editor)
 
 
 @router.post("/{identifier}/clips/{clip_id}/resume", status_code=202)
@@ -342,7 +379,7 @@ def resume(identifier: str, clip_id: str, main: DB, db: IDB, user: Actor, storag
         )
     )
     db.commit()
-    return view(db, p, storage)
+    return view(db, p, storage, user.production_editor)
 
 
 @router.get("/{identifier}/screenplay")

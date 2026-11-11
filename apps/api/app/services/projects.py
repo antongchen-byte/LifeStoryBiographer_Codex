@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+from .production_context import scope
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -11,6 +13,15 @@ WRITE_ROLES = {"OWNER", "SUBJECT", "EDITOR"}
 def access(
     db: Session, project_id: str, user: User, write: bool = False, owner: bool = False
 ) -> tuple[Project, ProjectMember]:
+    if getattr(user, "workspace_project_id", None) and project_id != user.workspace_project_id:
+        raise DomainError(404, "Project is outside the selected workspace")
+    if scope(user):
+        if project_id != scope(user):
+            raise DomainError(404, "Project is outside the selected production workspace")
+        project = db.get(Project, project_id)
+        if not project or not user.production_editor:
+            raise DomainError(403, "Production editor access required")
+        return project, SimpleNamespace(role="PRODUCTION_EDITOR")
     member = db.get(ProjectMember, (project_id, user.id))
     project = db.get(Project, project_id) if member else None
     if not project or not member:

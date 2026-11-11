@@ -64,6 +64,15 @@ def resume(asset: MediaAsset, storage: ObjectStorage) -> UploadStarted:
 
 
 def duplicates(db, project, user, data):
+    from .production_context import scope
+    if scope(user) or getattr(user, "workspace_project_id", None):
+        rows = db.execute(select(MediaAsset, Project.title).join(Project, MediaAsset.project_id == Project.id).where(
+            MediaAsset.project_id == project.id, func.lower(MediaAsset.original_filename) == data.filename.lower(),
+            MediaAsset.size_bytes == data.size_bytes,
+            or_(MediaAsset.idempotency_key != data.idempotency_key, MediaAsset.idempotency_key.is_(None)),
+        ).limit(10))
+        return [{"asset_id":a.id,"project_id":a.project_id,"project_title":title,"filename":a.original_filename,"status":a.status.value} for a,title in rows]
+
     # Existing audit events provide uploader identity for old as well as new assets.
     uploaded_by_user = select(AuditEvent.target_id).where(
         AuditEvent.actor_id == user.id, AuditEvent.action == "media.upload_started"

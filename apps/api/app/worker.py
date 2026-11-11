@@ -192,6 +192,16 @@ async def dispatch(client: Client) -> None:
         await asyncio.sleep(2)
 
 
+async def deliver_owner_emails():
+    from .services.owner_email import deliver_pending
+    while True:
+        try:
+            await asyncio.to_thread(deliver_pending)
+        except Exception as error:
+            logger.warning("Owner email queue deferred: %s", type(error).__name__)
+        await asyncio.sleep(15)
+
+
 async def run() -> None:
     logging.basicConfig(level=logging.INFO)
     while True:
@@ -228,7 +238,7 @@ async def run() -> None:
             max_concurrent_activities=2,
         )
         async with worker:
-            await dispatch(client)
+            await asyncio.gather(dispatch(client), deliver_owner_emails())
 
 
 if __name__ == "__main__":

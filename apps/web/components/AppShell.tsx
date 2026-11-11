@@ -12,6 +12,11 @@ import {
   LogOut,
   ArrowUpRight,
 } from "lucide-react";
+import WorkingContext from "./WorkingContext";
+import ProductionShare from "./ProductionShare";
+import ProductionContext from "./ProductionContext";
+import {request} from "../lib/api";
+import {useQuery} from "@tanstack/react-query";
 import { useEffect, type ReactNode } from "react";
 const routes = [
   { href: "/", label: "My biographies", icon: LayoutGrid },
@@ -34,6 +39,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const path = usePathname(),
     router = useRouter();
   const { data: session, status } = useSession();
+  const capability=useQuery({queryKey:["production-capability",session?.user?.email],queryFn:()=>request<{production_editor:boolean;actor_id:string}>("/production/me"),enabled:status==="authenticated"});
   useEffect(() => {
     if (status === "unauthenticated" && path !== "/login")
       router.replace("/login");
@@ -41,6 +47,17 @@ export default function AppShell({ children }: { children: ReactNode }) {
   if (path === "/login") return children;
   if (status !== "authenticated")
     return <div className="loading-screen">Opening your studio…</div>;
+  if (capability.isPending) return <div className="loading-screen">Opening your studio…</div>;
+  if (capability.isError) return <div className="loading-screen">Unable to verify workspace access. Reload to retry; your selected project has been kept.</div>;
+  if (typeof window !== "undefined") {
+    const working=sessionStorage.getItem("working-project");
+    if(working && JSON.parse(working).actor_id !== capability.data?.actor_id)sessionStorage.removeItem("working-project");
+    const stored=sessionStorage.getItem("production-project");
+    if(stored && (!capability.data?.production_editor || JSON.parse(stored).actor_id !== capability.data?.actor_id)) sessionStorage.removeItem("production-project");
+  }
+  const filmAllowed = process.env.NEXT_PUBLIC_ENABLE_FILM_STUDIOS !== "false" &&
+    (process.env.NEXT_PUBLIC_FILM_STUDIOS_EDITOR_ONLY !== "true" || capability.data?.production_editor === true);
+  const filmPage = path.startsWith("/screenplay-editor") || path.startsWith("/cinema-studio");
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -54,7 +71,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
         </Link>
         <div className="workspace-label">YOUR WORKSPACE</div>
         <nav aria-label="Main navigation">
-          {routes.filter(route => process.env.NEXT_PUBLIC_ENABLE_FILM_STUDIOS !== "false" || !["/screenplay-editor", "/cinema-studio"].includes(route.href)).map(({ href, label, icon: Icon, number }) => (
+          {capability.data?.production_editor && <Link className="nav-link" href="/production-projects">Production projects</Link>}
+          {routes.filter(route => filmAllowed || !["/screenplay-editor", "/cinema-studio"].includes(route.href)).map(({ href, label, icon: Icon, number }) => (
             <Link
               key={href}
               href={href}
@@ -85,7 +103,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
           <button
             className="icon-button"
             aria-label="Sign out"
-            onClick={() => void signOut({ callbackUrl: "/login" })}
+            onClick={() => {sessionStorage.removeItem("production-project");sessionStorage.removeItem("working-project");void signOut({ callbackUrl: "/login" });}}
           >
             <LogOut size={16} />
           </button>
@@ -98,7 +116,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
             Biography workspace <ArrowUpRight size={14} />
           </a>
         </header>
-        <main>{children}</main>
+        <main><WorkingContext />{capability.data?.production_editor && <ProductionContext />}<div id="module-page-content">{filmPage && !filmAllowed ? <p role="alert">This studio is available to Production Editors. Your shared editor materials are available from My biographies.</p> : children}</div>{capability.data?.production_editor && <ProductionShare />}</main>
         <footer>Made from memories. Shaped by you.</footer>
       </div>
     </div>

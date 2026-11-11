@@ -20,8 +20,16 @@ PYSETUP
 cat > compose.yaml <<'COMPOSE'
 name: biographer-cloud
 x-api: &api
-  image: us-east1-docker.pkg.dev/gen-lang-client-0362286623/biographer/api:interview-templates-20261028
+  image: us-east1-docker.pkg.dev/gen-lang-client-0362286623/biographer/api:editor-photos-20261110
   env_file: runtime.env
+  environment:
+    ENABLE_FILM_STUDIOS: "true"
+    FILM_STUDIOS_EDITOR_ONLY: "true"
+    SMTP_HOST: smtp.gmail.com
+    SMTP_PORT: "587"
+    SMTP_USERNAME: antongchen@gmail.com
+    SMTP_FROM: antongchen@gmail.com
+    NOTIFICATION_BASE_URL: https://lifestory-biographer-1019141557914.us-east1.run.app
   restart: unless-stopped
 services:
   sqlproxy:

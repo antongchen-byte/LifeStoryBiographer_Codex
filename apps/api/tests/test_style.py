@@ -922,3 +922,14 @@ def test_delete_script_blocks_active_work_and_handles_manual_script(client, owne
     add_turn(client, owner, p, s)
     assert client.delete(url, headers=owner).status_code == 204
     assert list(db.scalars(select(TranscriptTurn))) == []
+
+
+def test_biography_transcription_collection_is_reused(client, owner, project):
+    from conftest import account
+    url = f"/api/projects/{project}/transcription-profile"
+    first = client.post(url, headers=owner)
+    assert first.status_code == 200
+    assert client.post(url, headers=owner).json()["id"] == first.json()["id"]
+    other = account(client, "collection-other@example.com")
+    assert client.post(url, headers=other).status_code == 404
+    assert len(client.get("/api/profiles", headers=owner).json()) == 1

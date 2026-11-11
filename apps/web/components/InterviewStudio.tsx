@@ -1,4 +1,5 @@
 "use client";
+import {useFilmAccess} from "../lib/film-access";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -76,16 +77,22 @@ function download(name: string, value: string, type = "text/markdown") {
 }
 
 export default function InterviewStudio({
-  view = "setup",
+  view: initialView = "setup",
   sessionId = "",
-  begin = false,
+  begin: initialBegin = false,
+  initialConfig = "",
 }: {
-  view?: "setup" | "conversation" | "review";
+  view?: "setup" | "configure" | "conversation" | "review";
+  initialConfig?: string;
   sessionId?: string;
   begin?: boolean;
 }) {
   const router = useRouter();
-  const isSetup = view === "setup";
+  const filmAllowed=useFilmAccess();
+  const [view, setView] = useState(initialView);
+  const [begin, setBegin] = useState(initialBegin);
+  const isConfig = view === "configure";
+  const isSetup = view === "setup" || isConfig;
   const isReview = view === "review";
   const transcriptPanel = useRef<HTMLDivElement | null>(null);
   const openingPlayed = useRef(false);
@@ -100,7 +107,7 @@ export default function InterviewStudio({
   });
   const recommendations = useQuery({
     queryKey: ["interview-recommended-templates"],
-    queryFn: () => request<{id: string; title: string; filename: string; markdown: string}[]>("/interviews/recommended-templates"),
+    queryFn: () => request<{id: string; title: string; filename: string; source_filename?: string; markdown: string; error?: string}[]>("/interviews/recommended-templates"),
   });
   const [recommended, setRecommended] = useState<string[]>(["life-story"]);
   const configs = useQuery({
@@ -123,22 +130,48 @@ export default function InterviewStudio({
   const [sourceQuery, setSourceQuery] = useState(""),
     [sourceSearch, setSourceSearch] = useState("");
   const [nameEdited, setNameEdited] = useState(false);
-  const [config, setConfig] = useState(""),
+  const [config, setConfig] = useState(initialConfig),
     [session, setSession] = useState(sessionId),
     [title, setTitle] = useState("My life story");
-  const setupSignature = JSON.stringify({project, avatar, genre, assets, scripts, recommended});
+  const savedMarkdown = useQuery({
+    queryKey:["interviewer-markdown",config],
+    queryFn:()=>request<{filename:string;markdown:string;configuration:{project:string;avatar:string;name:string;genre:string;assets:string[];scripts:Record<string,string>;recommended:string[]}}>(`/interviews/configs/${config}/markdown`),
+    enabled:isConfig && !!config,
+  });
+  useEffect(() => {
+    if (initialConfig || sessionId) return;
+    const raw = sessionStorage.getItem("production-project") || sessionStorage.getItem("working-project");
+    if (!raw) return;
+    const selected = JSON.parse(raw);
+    setProject(selected.id);
+    if (selected.config_id) setConfig(selected.config_id);
+  }, [initialConfig, sessionId]);
+  useEffect(()=>{
+    const raw=sessionStorage.getItem('working-project');
+    if(!raw || !config || !configs.data?.some(c=>c.id===config && c.project_id===project))return;
+    const context=JSON.parse(raw);
+    if(context.id===project && context.config_id!==config){sessionStorage.setItem('working-project',JSON.stringify({...context,config_id:config}));window.dispatchEvent(new Event('working-context-updated'));}
+  },[config,project,configs.data]);
+  const setupSignature = JSON.stringify({project, avatar, name, genre, assets, scripts, recommended});
   const savedSetupSignature = useRef(setupSignature);
   const [setupDirty, setSetupDirty] = useState(false);
   useEffect(() => { savedSetupSignature.current = setupSignature; setSetupDirty(false); }, [config]);
-  useEffect(() => { setSetupDirty(!!config && setupSignature !== savedSetupSignature.current); }, [setupSignature, config]);
+  useEffect(() => { setSetupDirty(isConfig && !!config && setupSignature !== savedSetupSignature.current); }, [setupSignature, config]);
+  useEffect(() => {
+    const saved = savedMarkdown.data?.configuration;
+    if (!saved || !isConfig) return;
+    setProject(saved.project); setAvatar(saved.avatar); setName(saved.name); setNameEdited(true);
+    setGenre(saved.genre); setAssets(saved.assets); setScripts(saved.scripts); setRecommended(saved.recommended);
+    savedSetupSignature.current = JSON.stringify(saved);
+    setSetupDirty(false);
+  }, [savedMarkdown.data, isConfig]);
   const [consent, setConsent] = useState(false),
     [voice, setVoice] = useState(true),
     [text, setText] = useState("");
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [notice, setNotice] = useState("");
-  const [showSetup, setShowSetup] = useState(true),
-    [recording, setRecording] = useState(false),
+  const [recording, setRecording] = useState(false),
     [level, setLevel] = useState(0),
     [speaking, setSpeaking] = useState(false);
   const [audioUrl, setAudioUrl] = useState(""),
@@ -206,8 +239,8 @@ export default function InterviewStudio({
   const s = current.data;
   const locked = busy || recording || openingMic || handsFree;
   useEffect(() => {
-    if (!project && projects.data?.some((p) => p.role === "OWNER"))
-      setProject(projects.data.find((p) => p.role === "OWNER")!.id);
+    if (!project && projects.data?.some((p) => ["OWNER", "PRODUCTION_EDITOR"].includes(p.role)))
+      setProject(projects.data.find((p) => ["OWNER", "PRODUCTION_EDITOR"].includes(p.role))!.id);
   }, [project, projects.data]);
   useEffect(() => {
     if (view === "conversation" && transcriptPanel.current) {
@@ -356,10 +389,16 @@ export default function InterviewStudio({
     stopMeter();
     setSession(id);
     localStorage.setItem("interview-active-session", id);
-    setShowSetup(false);
     setRecordedBlob(null);
     pendingRequest.current = null;
     setText("");
+    if (beginInterview && initialView === "setup") {
+      openingPlayed.current = false;
+      setBegin(true);
+      setView("conversation");
+      requestAnimationFrame(() => document.getElementById("active-interview")?.scrollIntoView({block:"start"}));
+      return;
+    }
     const status = sessions.data?.find((item) => item.id === id)?.status;
     router.push(
       `/interview-studio/${id}${!beginInterview && status && status !== "active" ? "/review" : ""}${beginInterview ? "?begin=1" : ""}`,
@@ -563,17 +602,17 @@ export default function InterviewStudio({
     <div className={`style-lab interview-studio interview-page-${view}`}>
       <div className="page-heading">
         <div>
-          <p className="eyebrow">INTERVIEW STUDIO</p>
+          <p className="eyebrow">{isConfig ? "STYLE LAB" : "INTERVIEW STUDIO"}</p>
           <h1>
-            {isSetup
+            {isConfig ? "Configure your interviewer" : isSetup
               ? "A conversation worth keeping"
               : isReview
                 ? "Review your interview"
                 : s?.title || "Your interview"}
           </h1>
           <p>
-            {isSetup
-              ? "Choose an interviewer, bring your references, and tell your story."
+            {isConfig ? "Choose an avatar, templates and saved scripts to shape your interviewer." : isSetup
+              ? "Start with your configured interviewer, or resume and review a saved interview."
               : isReview
                 ? "Read the complete conversation, correct each turn, and approve the script when ready."
                 : "Talk with your interviewer. Your recorded conversation appears alongside the avatar."}
@@ -597,23 +636,21 @@ export default function InterviewStudio({
         <Button
           variant="outline"
           disabled={locked || !!recordedBlob || !!text.trim()}
-          onClick={() => router.push("/interview-studio")}
+          onClick={() => {
+            if (initialView === "setup") {
+              player.current?.pause(); setAudioUrl(""); setSpeaking(false); stopMeter();
+              setBegin(false); setSession(""); setView("setup");
+              void refresh();
+            } else router.push("/interview-studio");
+          }}
         >
-          Back to interviewer setup
+          Back to Interview Studio
         </Button>
       )}
       {isSetup && (
         <>
           <div className="interview-toolbar">
-            <Button
-              variant="outline"
-              disabled={locked}
-              onClick={() => setShowSetup(!showSetup)}
-            >
-              {showSetup
-                ? "Hide interviewer setup"
-                : "Configure an interviewer"}
-            </Button>
+            {!isConfig && <>
             <label>
               Saved interviews
               <select
@@ -629,10 +666,11 @@ export default function InterviewStudio({
                 ))}
               </select>
             </label>
+            </>}
           </div>
-          {showSetup && (
+          {isConfig && (
             <section className="style-panel">
-              <h2>1. Configure your interviewer</h2>
+              <h2>Interviewer settings and references</h2>
               <label>
                 Biography workspace
                 <select
@@ -645,7 +683,7 @@ export default function InterviewStudio({
                 >
                   <option value="">Choose a biography</option>
                   {projects.data
-                    ?.filter((p) => p.role === "OWNER")
+                    ?.filter((p) => ["OWNER", "PRODUCTION_EDITOR"].includes(p.role))
                     .map((p) => (
                       <option key={p.id} value={p.id}>
                         {p.title}
@@ -653,7 +691,7 @@ export default function InterviewStudio({
                     ))}
                 </select>
               </label>
-              {!projects.data?.some((p) => p.role === "OWNER") && (
+              {!projects.data?.some((p) => ["OWNER", "PRODUCTION_EDITOR"].includes(p.role)) && (
                 <p>Create a biography workspace first from My biographies.</p>
               )}
               <div className="interview-avatar-options">
@@ -739,14 +777,15 @@ export default function InterviewStudio({
                 {recommendations.data?.map((template) => (
                   <div className="template-row" key={template.id}>
                     <label className="interview-check">
-                      <input type="checkbox" disabled={locked} checked={recommended.includes(template.id)}
+                      <input type="checkbox" disabled={locked || !!template.error} checked={recommended.includes(template.id)}
                         onChange={(e) => setRecommended(e.target.checked ? [...recommended, template.id] : recommended.filter((id) => id !== template.id))} />
-                      <span><strong>{template.title}</strong><small>{template.filename}</small></span>
+                      <span><strong>{template.title}</strong><small>{template.source_filename || template.filename}</small></span>
                     </label>
-                    <details className="template-preview"><summary>Preview template</summary><pre>{template.markdown}</pre><Button variant="outline" onClick={() => download(template.filename, template.markdown)}>Download template</Button></details>
+                    {template.error ? <p role="alert">{template.error}</p> : <details className="template-preview"><summary>Preview template</summary><pre>{template.markdown}</pre><Button variant="outline" onClick={() => download(template.filename, template.markdown)}>Download Markdown</Button></details>}
                   </div>
                 ))}
               </details>
+              <p className="style-help">You can also upload a previous interviewer .md file here and select it as a reference. The name and avatar above define the new interviewer.</p>
               {project ? <MediaLibrary projectId={project} templatesOnly readOnly={locked} selectedTemplateIds={assets} onTemplateSelection={setAssets} /> : <p>Select a biography workspace above to upload reference templates.</p>}
               <h3>Select from saved scripts</h3>
               <form
@@ -809,7 +848,7 @@ export default function InterviewStudio({
               </div>
               {sources.data?.length === 0 && (
                 <p>
-                  No saved scripts match. Approve and save a Style Lab script
+                  No saved scripts match. Approve and save a recording script in My Biographies
                   first, or continue with templates or a default genre.
                 </p>
               )}
@@ -858,10 +897,11 @@ export default function InterviewStudio({
             </section>
           )}
           <section className="style-panel">
-            <h2>2. Start an interview</h2>
+            <h2>{isConfig ? "Saved interviewer configurations" : "Start an interview"}</h2>
+            {isConfig && config && <details><summary>Preview saved interviewer Markdown</summary>{savedMarkdown.error ? <p role="alert">Unable to load configuration preview.</p> : <pre style={{whiteSpace:"pre-wrap",maxHeight:300,overflow:"auto"}}>{savedMarkdown.data?.markdown || "Loading configuration…"}</pre>}</details>}
             {setupDirty && <p role="status">Your interviewer settings or references have changed. Save the configuration above before starting.</p>}
             <div className="style-form-grid">
-              <label>
+              {isConfig ? <label>
                 Configured interviewer
                 <select
                   value={config}
@@ -883,17 +923,17 @@ export default function InterviewStudio({
                     </option>
                   ))}
                 </select>
-              </label>
-              <label>
+              </label> : <div><strong>Selected interviewer</strong><p>{configs.data?.find(c=>c.id===config)?.name || "No interviewer selected"}</p><Button variant="outline" onClick={()=>router.push("/style-lab")}>Choose in Style Lab</Button></div>}
+              {!isConfig && <label>
                 Interview title
                 <input
                   value={title}
                   maxLength={200}
                   onChange={(e) => setTitle(e.target.value)}
                 />
-              </label>
+              </label>}
             </div>
-            <label className="interview-check">
+            {!isConfig && <><label className="interview-check">
               <input
                 type="checkbox"
                 checked={consent}
@@ -908,8 +948,9 @@ export default function InterviewStudio({
                 before chatting.
               </p>
             )}
+            </>}
             <div className="interview-toolbar">
-              <Button
+              {isConfig ? <Button disabled={locked || !config || setupDirty} onClick={()=>router.push(`/interview-studio?config=${encodeURIComponent(config)}`)}>Proceed to Interview Studio</Button> : <Button
                 disabled={
                   locked ||
                   !!recordedBlob ||
@@ -940,8 +981,8 @@ export default function InterviewStudio({
                 }
               >
                 Start interview
-              </Button>
-              <Button
+              </Button>}
+              {isConfig && <><Button
                 variant="outline"
                 disabled={locked || !config}
                 onClick={() =>
@@ -974,7 +1015,7 @@ export default function InterviewStudio({
                 }}
               >
                 Delete configuration
-              </Button>
+              </Button></>}
             </div>
           </section>
         </>
@@ -1449,7 +1490,7 @@ export default function InterviewStudio({
                 </Button>
               </div>
             )}
-            {process.env.NEXT_PUBLIC_ENABLE_FILM_STUDIOS !== "false" && s.status !== "active" && (
+            {filmAllowed && s.status !== "active" && (
               <Button
                 variant="outline"
                 onClick={() =>
@@ -1505,13 +1546,13 @@ export default function InterviewStudio({
           </div>
         </section>
       )}
-      {isSetup && (
+      {view === "setup" && (
         <section className="style-panel">
           <h2>Approved interviews for future screenplays</h2>
           <p>
-            Only approved conversations appear here. These live in the separate{" "}
-            <code>biographer_interviews</code> PostgreSQL database.
+            Approved conversations are saved for future screenplay creation.
           </p>
+          <label>Biography workspace<select value={project} onChange={e=>setProject(e.target.value)}><option value="">Choose a biography</option>{projects.data?.map(p=><option value={p.id} key={p.id}>{p.title || p.subject_name}</option>)}</select></label>
           <form
             className="style-attach"
             onSubmit={(e) => {

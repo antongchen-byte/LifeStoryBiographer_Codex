@@ -8,7 +8,7 @@ steps:
   - name: gcr.io/cloud-builders/docker
     id: web
     waitFor: ['-']
-    args: [build, --build-arg, NEXT_PUBLIC_ENABLE_FILM_STUDIOS=false, -t, '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/web:${_TAG}', apps/web]
+    args: [build, --build-arg, NEXT_PUBLIC_ENABLE_FILM_STUDIOS=true, --build-arg, NEXT_PUBLIC_FILM_STUDIOS_EDITOR_ONLY=true, -t, '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/web:${_TAG}', apps/web]
 images:
   - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/api:${_TAG}'
   - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/web:${_TAG}'

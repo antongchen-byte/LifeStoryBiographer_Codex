@@ -218,6 +218,7 @@ export default function ScreenplayEditor({
     [seconds, setSeconds] = useState<4 | 6 | 8>(8);
   const [selected, setSelected] = useState<string[]>([]);
   const started = useRef(false);
+  useEffect(()=>{if(initialInterview || initialScreenplay)return;const raw=sessionStorage.getItem('working-project');if(raw){const context=JSON.parse(raw);setProject(context.id);if(context.screenplay_id)setId(context.screenplay_id);}},[]);
   const projects = useQuery({
     queryKey: ["projects"],
     queryFn: () => request<Project[]>("/projects"),
@@ -255,6 +256,15 @@ export default function ScreenplayEditor({
   useEffect(() => {
     if (current.data && !dirty) setDraft(current.data);
   }, [current.data, dirty]);
+  useEffect(() => {
+    const contextKey = sessionStorage.getItem("production-project") ? "production-project" : "working-project";
+    const saved = sessionStorage.getItem(contextKey);
+    if (!saved || !draft) return;
+    const context = JSON.parse(saved);
+    if (context.id !== draft.project_id || context.screenplay_id === draft.id) return;
+    sessionStorage.setItem(contextKey, JSON.stringify({...context, screenplay_id:draft.id}));
+    window.dispatchEvent(new Event(contextKey === "production-project" ? "production-context-updated" : "working-context-updated"));
+  }, [draft?.id, draft?.project_id]);
   function update(value: Screenplay) {
     setId(value.id);
     setDraft(value);
@@ -350,6 +360,14 @@ export default function ScreenplayEditor({
   }
   async function generate(kind: "draft" | "breakdown") {
     if (!draft) return;
+    if (!consent) {
+      setError("Select ‘Allow Gemini to process the reviewed conversation and material descriptions’ above, then click Convert conversation to screenplay draft.");
+      return;
+    }
+    if (!Number.isInteger(pages) || pages < 1 || pages > 30) {
+      setError("Enter a whole number of sections between 1 and 30.");
+      return;
+    }
     if (
       (kind === "draft" && draft.sections.length) ||
       (kind === "breakdown" && draft.sections.some((p) => p.subsections.length))
@@ -487,7 +505,7 @@ export default function ScreenplayEditor({
             >
               <option value="">Choose a workspace</option>
               {projects.data
-                ?.filter((p) => p.role === "OWNER")
+                ?.filter((p) => ["OWNER", "PRODUCTION_EDITOR"].includes(p.role))
                 .map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.title || p.subject_name}
@@ -765,19 +783,27 @@ export default function ScreenplayEditor({
                 type="checkbox"
                 checked={consent}
                 disabled={locked}
-                onChange={(e) => setConsent(e.target.checked)}
+                onChange={(e) => {setConsent(e.target.checked);setError("");}}
               />
               Allow Gemini to process the reviewed conversation and material
               descriptions for this screenplay.
             </label>
             <Button
-              disabled={locked || !consent || pages < 1 || pages > 30}
+              disabled={locked}
+              aria-describedby="screenplay-generation-help"
               onClick={() => void generate("draft")}
             >
               {draft.sections.length
                 ? "Regenerate screenplay draft"
                 : "Convert conversation to screenplay draft"}
             </Button>
+            <p id="screenplay-generation-help" role="status">
+              {!consent ? "Before converting, select the permission checkbox above to allow Gemini processing."
+                : busy ? "Submitting your request…"
+                : ACTIVE.includes(draft.state) ? "Generation is in progress. This page will update automatically when the draft is ready."
+                : "Ready to generate. Your reviewed conversation will be sent to Gemini."}
+            </p>
+            {error && <p role="alert" className="error">{error}</p>}
             {draft.job_kind !== "breakdown" && generationProgress}
             {draft.error && <p role="alert">{draft.error}</p>}
             {draft.draft_stale && (

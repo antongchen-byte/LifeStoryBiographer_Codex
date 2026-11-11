@@ -191,7 +191,7 @@ export default function StyleLab() {
                   Select a biography
                 </option>
                 {projects.data
-                  ?.filter((p) => p.role === "OWNER")
+                  ?.filter((p) => ["OWNER", "PRODUCTION_EDITOR"].includes(p.role))
                   .map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.title || p.subject_name}
@@ -209,11 +209,11 @@ export default function StyleLab() {
             />
           </label>
           <Button
-            disabled={busy || !projects.data?.some((p) => p.role === "OWNER")}
+            disabled={busy || !projects.data?.some((p) => ["OWNER", "PRODUCTION_EDITOR"].includes(p.role))}
           >
             Create profile
           </Button>
-          {!projects.data?.some((p) => p.role === "OWNER") && (
+          {!projects.data?.some((p) => ["OWNER", "PRODUCTION_EDITOR"].includes(p.role)) && (
             <p className="style-help">
               <Link href="/">Create a biography first</Link> to hold your source
               recordings.
@@ -275,14 +275,16 @@ export default function StyleLab() {
   );
 }
 
-function Workspace({
+export function Workspace({
   profile: p,
   action,
   busy,
+  recordingsOnly = false,
 }: {
   profile: Detail;
   action: Action;
   busy: boolean;
+  recordingsOnly?: boolean;
 }) {
   const [tab, setTab] = useState("recordings");
   const [sourceId, setSourceId] = useState("");
@@ -324,7 +326,7 @@ function Workspace({
     }, "Recording deleted");
   };
   const openTranscript = (id: string) => {
-    window.location.assign(`/style-lab/${p.id}/scripts/${id}`);
+    window.location.assign(`/projects/${p.project_id}/scripts/${p.id}/${id}`);
   };
   const startTranscript = (sourceId: string) =>
     action(
@@ -381,8 +383,8 @@ function Workspace({
   ];
   return (
     <>
-      <nav className="style-tabs" aria-label="Style Lab steps">
-        {tabs.map(({ id, label, icon: Icon, count }, i) => (
+      <nav className="style-tabs" aria-label={recordingsOnly ? "Recording transcription steps" : "Style Lab steps"}>
+        {tabs.filter(t => !recordingsOnly || ["recordings", "transcript"].includes(t.id)).map(({ id, label, icon: Icon, count }, i) => (
           <button
             key={id}
             type="button"
@@ -398,7 +400,7 @@ function Workspace({
           </button>
         ))}
       </nav>
-      <div className="style-layout">
+      <div className={recordingsOnly ? "recording-workspace" : "style-layout"}>
         <section className="style-main">
           {(tab === "recordings" || tab === "transcript") && (
             <div className="style-processing-setup">
@@ -575,16 +577,15 @@ function Workspace({
                 <div>
                   <h2>Your source recordings</h2>
                   <p>
-                    Choose interviews that capture the approach you want to
-                    learn.
+                    Create scripts from the audio and video uploaded to this biography.
                   </p>
                 </div>
-                <Button
+                {!recordingsOnly && <Button
                   variant="outline"
                   onClick={() => setShowUpload(!showUpload)}
                 >
                   <Plus size={15} /> Upload recordings
-                </Button>
+                </Button>}
               </div>
               {showUpload && (
                 <div className="style-panel">
@@ -830,8 +831,7 @@ function Workspace({
                   <p className="style-help">
                     Speaker labels are local to each audio section. Verify roles
                     throughout the recording; a label in one section does not
-                    establish identity in another. Select exchanges to use as
-                    pattern evidence.
+                    establish identity in another. Open Review & save script to approve and archive the transcript.
                   </p>
                   <Transcript
                     key={`${source.id}-${source.turn_count === 0 ? "empty" : "populated"}`}
@@ -839,10 +839,11 @@ function Workspace({
                     source={source}
                     action={action}
                     blocked={blocked}
+                    showSelection={!recordingsOnly}
                     selected={selectedTurns}
                     setSelected={setSelectedTurns}
                   />
-                  {!!selectedTurns.length && (
+                  {!recordingsOnly && !!selectedTurns.length && (
                     <div className="style-selection">
                       <span>{selectedTurns.length} turns selected</span>
                       <Button
@@ -1024,7 +1025,7 @@ function Workspace({
             </>
           )}
         </section>
-        <aside className="style-aside">
+        {!recordingsOnly && <aside className="style-aside">
           <div className="style-panel">
             <span className="tiny-label">YOUR REVIEW CHECKLIST</span>
             <h3>From recording to style</h3>
@@ -1081,7 +1082,7 @@ function Workspace({
               </label>
             )}
           </div>
-        </aside>
+        </aside>}
       </div>
     </>
   );

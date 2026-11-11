@@ -770,7 +770,8 @@ def test_assigned_name_overrides_saved_identity_without_changing_history(
     }).status_code == 422
 
 
-def test_recommended_templates_are_pinned_and_retrievable(client, owner, project, interview_db):
+def test_recommended_templates_are_pinned_and_retrievable(client, owner, project, interview_db, tmp_path, monkeypatch):
+    monkeypatch.setattr(routes, "LOCAL_TEMPLATE_DIR", tmp_path)
     catalog = client.get('/api/interviews/recommended-templates', headers=owner)
     assert catalog.status_code == 200
     templates = catalog.json()
@@ -790,3 +791,25 @@ def test_recommended_templates_are_pinned_and_retrievable(client, owner, project
         'project_id': project, 'avatar': 'flame', 'name': 'Robin',
         'recommended_template_ids': ['../../private'],
     }).status_code == 422
+
+
+def test_local_default_templates_are_discovered_and_saved(client, owner, project, interview_db, tmp_path, monkeypatch):
+    import zipfile
+    from app import interview_routes
+    monkeypatch.setattr(interview_routes, "LOCAL_TEMPLATE_DIR", tmp_path)
+    with zipfile.ZipFile(tmp_path / "Interview questions.docx", "w") as archive:
+        archive.writestr("word/document.xml", '<w:document xmlns:w="urn:test"><w:p><w:r><w:t>What changed your life?</w:t></w:r></w:p></w:document>')
+    (tmp_path / "broken.docx").write_text("invalid")
+    catalog = client.get('/api/interviews/recommended-templates', headers=owner).json()
+    local = next(t for t in catalog if t.get('source_filename') == 'Interview questions.docx')
+    assert local['markdown'] == 'What changed your life?'
+    assert local['filename'].endswith('.md')
+    assert next(t for t in catalog if t['filename'] == 'broken.docx')['error']
+    response = client.post('/api/interviews/configs', headers=owner, json={
+        'project_id': project, 'avatar':'flame', 'name':'Guide', 'genre':'life_story',
+        'recommended_template_ids':[local['id']],
+    })
+    assert response.status_code == 201
+    assert 'What changed your life?' in response.json()['markdown']
+    (tmp_path / "Later.md").write_text("Additional questions")
+    assert len(client.get('/api/interviews/recommended-templates', headers=owner).json()) == len(catalog) + 1

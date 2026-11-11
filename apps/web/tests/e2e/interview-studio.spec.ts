@@ -59,9 +59,9 @@ test("configure a real interviewer, then exercise voice, chat and approval UI wi
   await expect(
     page.getByRole("heading", { name: "Interview fixture biography" }),
   ).toBeVisible();
-  await page.goto("/interview-studio");
+  await page.goto("/style-lab");
   await expect(
-    page.getByRole("heading", { name: "A conversation worth keeping" }),
+    page.getByRole("heading", { name: "Configure your interviewer" }),
   ).toBeVisible();
   await expect(page.getByLabel("Biography workspace")).not.toHaveValue("");
   const project = await page.getByLabel("Biography workspace").inputValue();
@@ -106,6 +106,7 @@ test("configure a real interviewer, then exercise voice, chat and approval UI wi
         json: { url: openingAudio() },
       }),
   );
+  await page.getByRole("button", { name: "Proceed to Interview Studio" }).click();
   await page.getByLabel(/I authorize sending/).check();
   await page
     .getByRole("button", { name: "Start interview", exact: true })

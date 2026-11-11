@@ -2,6 +2,7 @@
 
 import re
 
+from . import production_context as production
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -26,7 +27,7 @@ ACTIVE = ("pending", "dispatched", "running", "stopping")
 
 def profile(db: Session, identifier: str, user: User, lock=False):
     query = select(InterviewerProfile).where(
-        InterviewerProfile.id == identifier, InterviewerProfile.owner_id == user.id
+        InterviewerProfile.id == identifier, InterviewerProfile.owner_id == production.owner_id(user)
     )
     row = db.scalar(query.with_for_update() if lock else query)
     if not row:

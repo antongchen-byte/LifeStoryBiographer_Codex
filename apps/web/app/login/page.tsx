@@ -40,7 +40,11 @@ export default function Login() {
         throw new Error(
           "Unable to sign in. Check your email and password, then try again.",
         );
-      window.location.assign("/");
+      sessionStorage.removeItem("production-project");
+      sessionStorage.removeItem("working-project");
+      const capabilityResponse = await fetch("/api/backend/production/me", {cache:"no-store"});
+      const capability = capabilityResponse.ok ? await capabilityResponse.json() : null;
+      window.location.assign(capability?.production_editor ? "/production-projects" : "/");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Please try again.");
       setBusy(false);

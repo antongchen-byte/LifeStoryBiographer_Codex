@@ -1,5 +1,7 @@
 """Owner-scoped screenplay editing and durable generation."""
 
+from .services import production_context as production
+
 import hashlib
 import json
 import re
@@ -45,14 +47,18 @@ def content_hash(content):
 def access(main, db, user, identifier, lock=False):
     s = db.scalar(
         select(Screenplay)
-        .where(Screenplay.id == identifier, Screenplay.owner_id == user.id)
+        .where(Screenplay.id == identifier, Screenplay.owner_id == production.owner_id(user))
         .with_for_update()
         if lock
-        else select(Screenplay).where(Screenplay.id == identifier, Screenplay.owner_id == user.id)
+        else select(Screenplay).where(Screenplay.id == identifier, Screenplay.owner_id == production.owner_id(user))
     )
     if not s:
         raise DomainError(404, "Screenplay not found")
     projects.access(main, s.project_id, user, owner=True)
+    if lock and production.scope(user) and not s.source.get("production_draft"):
+        raise DomainError(409, "Open a versioned editor draft from Production projects before editing")
+    if s.source.get("production_draft") and not production.scope(user):
+        raise DomainError(404, "Screenplay not found")
     return s
 
 
@@ -193,8 +199,10 @@ def create(body: Create, main: DB, db: IDB, user: Actor):
             "notice": "Local filenames and links do not import materials. Attach files below or load the database interview.",
         }
     source["original_sha256"] = digest(markdown)
+    if production.scope(user):
+        source.update(production_draft=True, editor_id=user.id)
     s = Screenplay(
-        owner_id=user.id,
+        owner_id=production.owner_id(user),
         project_id=project_id,
         session_id=body.session_id,
         interview_uid=uid,
@@ -214,9 +222,11 @@ def create(body: Create, main: DB, db: IDB, user: Actor):
 def listing(main: DB, db: IDB, user: Actor):
     result = []
     for s in db.scalars(
-        select(Screenplay).where(Screenplay.owner_id == user.id).order_by(Screenplay.created_at.desc())
+        select(Screenplay).where(Screenplay.owner_id == production.owner_id(user), Screenplay.project_id.in_(production.project_ids(main, user))).order_by(Screenplay.created_at.desc())
     ):
         projects.access(main, s.project_id, user, owner=True)
+        if bool(s.source.get("production_draft")) != bool(production.scope(user)):
+            continue
         result.append(
             {
                 "id": s.id,
@@ -325,7 +335,7 @@ def generate(identifier: str, body: Generate, main: DB, db: IDB, user: Actor):
         raise DomainError(409, "Generate a draft from the current reviewed conversation first")
     s.generation += 1
     s.state, s.error = "pending", None
-    s.job = {"kind": body.kind, "count": body.sections, "seconds": body.seconds, "progress": 0, "results": []}
+    s.job = {"actor_id": user.id, "project_id": s.project_id, "kind": body.kind, "count": body.sections, "seconds": body.seconds, "progress": 0, "results": []}
     s.revision += 1
     db.commit()
     return detail(db, s)
@@ -362,7 +372,7 @@ def attach(identifier: str, body: Attach, main: DB, db: IDB, user: Actor, storag
                 raise DomainError(422, "Select processed materials from this biography workspace")
             mid = new_id()
             filename = re.sub(r"[^a-zA-Z0-9._-]+", "_", a.original_filename).strip(".") or "material"
-            key = f"interviews/{user.id}/{s.interview_uid}/screenplays/{s.id}/materials/{mid}/{filename}"
+            key = f"interviews/{production.owner_id(user)}/{s.interview_uid}/screenplays/{s.id}/materials/{mid}/{filename}"
             with tempfile.TemporaryDirectory() as directory:
                 path = Path(directory) / "source"
                 storage.download(a.storage_key, path)
@@ -462,7 +472,7 @@ def export(identifier: str, main: DB, db: IDB, user: Actor, storage: Storage):
     ):
         raise DomainError(409, "Generate current subsections and save your edits before exporting")
     text = markdown_export(data)
-    key = f"interviews/{user.id}/{s.interview_uid}/screenplays/{s.id}/revision-{s.revision}/screenplay.md"
+    key = f"interviews/{production.owner_id(user)}/{s.interview_uid}/screenplays/{s.id}/revision-{s.revision}/screenplay.md"
     put_bytes(storage, key, text.encode(), "text/markdown")
     entry = {"revision": s.revision, "storage_key": key, "sha256": digest(text)}
     s.exports = [e for e in s.exports if e["revision"] != s.revision] + [entry]

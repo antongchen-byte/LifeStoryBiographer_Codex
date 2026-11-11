@@ -15,6 +15,7 @@ import { Project, request } from "../lib/api";
 import { Button } from "../components/ui/button";
 export default function Dashboard() {
   const router = useRouter();
+  const editor = useQuery({queryKey:["dashboard-production-access"],queryFn:()=>request<{production_editor:boolean}>("/production/me")});
   const {
     data: projects = [],
     isPending,
@@ -51,6 +52,7 @@ export default function Dashboard() {
   );
   return (
     <>
+      {editor.data?.production_editor && <section className="style-panel"><h2>Production Editor workspace</h2><p>This page lists your personal biographies. Open Production projects to work on any user’s project.</p><Link className="button" href="/production-projects">View all users’ production projects</Link></section>}
       <div className="page-heading">
         <div>
           <span className="eyebrow">THE STORIES THAT MAKE US</span>

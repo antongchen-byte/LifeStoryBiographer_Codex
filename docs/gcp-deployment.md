@@ -79,3 +79,28 @@ The Compute Engine VM and Cloud SQL instance continue incurring charges while pr
 - Adds recommended Markdown templates, a local template file picker, and user-assigned interviewer name precedence. No database migration required.
 - VM startup metadata and checked-in backend configuration use the updated API image.
 - Live verification passed: registration/login, three-module navigation, recommended catalog, multiple selections saved in configuration Markdown, assigned name, and upload control. No paid Gemini calls were made.
+
+## Production Editor release — 2026-11-10
+
+- Live Cloud Run revision: `lifestory-biographer-00007-x92` (100% traffic).
+- Web image: `editor-release-20261110`; API/worker image: `editor-release-20261110-2`.
+- Cloud Builds: `fe8555cf-e8b0-4219-8900-71ae394fe4ef` (web/API), `60b2684d-933b-4531-aaa5-eadc8b9539ae` (corrected API migration).
+- Cloud SQL backup completed before migration (operation `f28f3ff1-615f-4f91-bd10-499800000026`). Main database is at Alembic `0009`; interview bootstrap completed.
+- Migration 0008 now uses a frozen table definition rather than importing the current model, preventing duplicate columns when upgrading through 0009.
+- Regular cloud accounts see My biographies, Style Lab, and Interview Studio. Owner access to shared Editor versions and published materials remains available. Screenplay/Cinema APIs enforce the Editor restriction server-side.
+- Production Editor sees all five modules and all production projects. Editor identity remains separate from project ownership. Account-management/billing/security permissions are not granted.
+- Local defaults remain unchanged: the cloud-specific `FILM_STUDIOS_EDITOR_ONLY` / `NEXT_PUBLIC_FILM_STUDIOS_EDITOR_ONLY` flags enable these restrictions only in the cloud deployment.
+- VM compose configuration and startup metadata use the new backend image. Existing cloud data was preserved; local user records/media were not copied.
+- Validation: backend suite 155 passed, 3 skipped; live Chrome checks verified regular-user navigation and API restrictions, Editor navigation and cross-user project access, opening project context across all studios, sharing an Editor version and owner review, eight recommended templates, and background assets.
+- Synthetic project/account removed after testing. Final cloud counts: four accounts (including the provisioned Editor), two original projects. API health passed.
+- No paid Gemini/video generation calls were made during release verification; provider output and quotas were not tested.
+
+## Editor photo selection and notification release — 2026-11-10
+
+- API/worker/web image tag: `editor-photos-20261110`; Cloud Build `766127b3-405d-450d-9d4d-58d4794726e6`.
+- Cloud Run revision `lifestory-biographer-00008-l2t` receives 100% traffic. VM compose and startup metadata use the same release.
+- Database backup completed (operation `ead3d045-394f-47ad-bcf5-3d1100000026`); Alembic migration `0010` applied; backend health passed.
+- Cinema Studio now lets Editors choose ready uploaded pictures from the selected biography and its interviews without preselecting them in Screenplay Editor. Other projects remain excluded. Selected originals and crops are frozen with the video-generation attempt.
+- Owner email notifications are queued transactionally when Editor versions, clip sets, or films are shared. Sender configuration uses `antongchen@gmail.com`. SMTP authentication was confirmed absent at rollout; emails remain queued until SMTP_PASSWORD is configured in the runtime secret and workers recreated.
+- Local Cinema/Editor regression checks passed (23 existing tests plus the new photo-selection test); frontend build passed. Live Chrome checks passed regular-user/Editor navigation, cross-user project access, sharing and owner review, recommended templates, and backgrounds. No paid video/provider calls or real email delivery were tested.
+- Temporary test account/project removed. Final counts remain four users and two original projects.

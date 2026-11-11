@@ -49,6 +49,7 @@ type Production = {
   all_approved: boolean;
   units: Unit[];
   renders: Job[];
+  all_project_photos?: boolean;
   materials: { id: string; filename: string; mime_type: string }[];
 };
 const ACTIVE = [
@@ -107,6 +108,7 @@ function ClipEditor({
   previous,
   production,
   consent,
+  onConsentChange,
   busy,
   action,
   onDraftChange,
@@ -116,8 +118,9 @@ function ClipEditor({
   previous?: Unit;
   production: Production;
   consent: boolean;
+  onConsentChange: (value:boolean) => void;
   busy: boolean;
-  action: (path: string, body?: unknown) => Promise<void>;
+  action: (path: string, body?: unknown) => Promise<string | undefined>;
 }) {
   const clip = unit.clip;
   const [prompt, setPrompt] = useState(clip?.request.prompt ?? unit.prompt);
@@ -131,11 +134,11 @@ function ClipEditor({
   const [bridge, setBridge] = useState(!!clip?.request.previous_id);
   const photos = production.materials.filter(
     (m) =>
-      unit.content.material_ids.includes(m.id) &&
+      (production.all_project_photos || unit.content.material_ids.includes(m.id)) &&
       m.mime_type.startsWith("image/"),
   );
   const [selected, setSelected] = useState(
-    clip?.request.material_ids ?? photos.slice(0, 3).map((m) => m.id),
+    clip?.request.material_ids ?? photos.filter((m) => unit.content.material_ids.includes(m.id)).slice(0, 3).map((m) => m.id),
   );
   const [variants, setVariants] = useState<Record<string, string>>(
     clip?.request.material_variants ?? {},
@@ -152,10 +155,21 @@ function ClipEditor({
     previous?.clip?.state === "ready" &&
     previous.clip.frame_ready &&
     !previous.stale;
+  function blocked(same=false) {
+    if(busy || generating)return "Wait for the current request to finish.";
+    if(!consent)return "Allow paid Gemini Omni generation using the checkbox below.";
+    if(![4,6,8].includes(unit.seconds))return "Rebuild this legacy subsection as 4, 6 or 8 seconds in Screenplay Editor first.";
+    if(!(same ? clip?.request.prompt : prompt)?.trim())return "Enter a video prompt first.";
+    if((same ? !!clip?.request.previous_id : bridge) && !canBridge)return "The previous clip needs a completed, current final frame. Generate it first or uncheck the previous-frame option for the edited prompt.";
+    return "";
+  }
   async function generate(same = false) {
+    const reason=blocked(same);
+    if(reason){setReviewError(reason);return;}
+    setReviewError("");
     if (clip?.state === "ready" && !confirm("Generate a replacement clip? This makes a new paid request and requires another review. The previous version remains saved.")) return;
     const prior = same && clip ? clip.request : null;
-    await action(`/subsections/${unit.id}/generate`, {
+    const failure = await action(`/subsections/${unit.id}/generate`, {
       prompt: prior?.prompt ?? prompt,
       continuity: prior?.continuity ?? continuity,
       material_ids: (prior ? !!prior.previous_id : bridge)
@@ -174,6 +188,7 @@ function ClipEditor({
       consent,
       expected_clip_id: clip?.id ?? null,
     });
+    if(failure)setReviewError(failure);
   }
   return (
     <article className="cinema-clip panel" onChange={onDraftChange}>
@@ -247,7 +262,7 @@ function ClipEditor({
         )}
         {photos.length > 0 && (
           <fieldset disabled={bridge}>
-            <legend>Use photos selected in Screenplay Editor (up to 3)</legend>
+            <legend>{production.all_project_photos ? "Choose from this biography’s uploaded pictures (up to 3)" : "Use photos selected in Screenplay Editor (up to 3)"}</legend>
             {photos.map((photo) => (
               <div key={photo.id}>
                 <label className="cinema-choice">
@@ -357,6 +372,7 @@ function ClipEditor({
           </div>
         )}
         {clip?.error && <p role="alert">{clip.error}</p>}
+        {reviewError && <p role="alert">{reviewError}</p>}
         {clip?.recoverable && (
           <Button
             disabled={busy}
@@ -373,7 +389,6 @@ function ClipEditor({
         )}
         {clip?.state === "ready" && clip.preview_url && (
           <>
-            {reviewError && <p role="alert">{reviewError}</p>}
             <VideoPreview
               key={clip.id}
               url={clip.preview_url}
@@ -424,6 +439,9 @@ function ClipEditor({
             {unsatisfied && (
               <div>
                 <p>Edit the prompt, or try again with the same prompt?</p>
+                <label className="cinema-choice"><input type="checkbox" checked={consent} disabled={busy || generating} onChange={e=>onConsentChange(e.target.checked)} />Allow paid Gemini Omni regeneration for this session</label>
+                {blocked() && <p role="status">{blocked()}</p>}
+                <Button disabled={!!blocked()} onClick={()=>void generate()}>Regenerate with edited prompt</Button>
                 <Button
                   variant="outline"
                   onClick={() => promptBox.current?.focus()}
@@ -471,7 +489,12 @@ export default function CinemaStudio({
 }: {
   screenplayId?: string;
 }) {
+  const [publishReady,setPublishReady]=useState(false);
+  const [published,setPublished]=useState(false);
+  const [editorProject,setEditorProject]=useState("");
+  useEffect(()=>{const p=sessionStorage.getItem("production-project");if(p)setEditorProject(JSON.parse(p).id);},[]);
   const [selected, setSelected] = useState(screenplayId ?? "");
+  useEffect(()=>{if(screenplayId)return;const raw=sessionStorage.getItem('working-project');if(raw){const context=JSON.parse(raw);if(context.screenplay_id)setSelected(context.screenplay_id);}},[]);
   const draftEdits = useRef(new Set<string>());
   useEffect(() => {
     const unload = (event: BeforeUnloadEvent) => { if (draftEdits.current.size) { event.preventDefault(); event.returnValue = ""; } };
@@ -550,7 +573,9 @@ export default function CinemaStudio({
       if (generated) draftEdits.current.delete(generated[1]);
       await current.refetch();
     } catch (e) {
-      setError((e as Error).message);
+      const message=(e as Error).message;
+      setError(message);
+      return message;
     } finally {
       setBusy(false);
     }
@@ -637,6 +662,7 @@ export default function CinemaStudio({
   }
   const bundle = production?.renders.findLast((j) => j.kind === "bundle");
   const film = production?.renders.findLast((j) => j.kind === "stitch");
+  useEffect(()=>{setPublishReady(false);setPublished(false);},[film?.id]);
   return (
     <>
       <div className="page-heading">
@@ -658,7 +684,7 @@ export default function CinemaStudio({
           <option value="">Select a saved screenplay</option>
           {screenplays.data?.map((s) => (
             <option key={s.id} value={s.id} disabled={s.cinema_ready === false}>
-              {s.title} · revision {s.revision}{s.cinema_ready === false ? " · Finish in Screenplay Editor first" : ""}
+              {s.title} · Screenplay UID: {s.id} · revision {s.revision}{s.cinema_ready === false ? " · Finish in Screenplay Editor first" : ""}
             </option>
           ))}
         </select>
@@ -667,6 +693,7 @@ export default function CinemaStudio({
       {screenplays.error && <p role="alert">{screenplays.error.message}</p>}
       {error && <p role="alert">{error}</p>}
       {notice && <p role="status">{notice}</p>}
+      {editorProject && film?.state === "ready" && <section className="style-panel"><h2>Publish finished video to the owner</h2><video controls src={film.preview_url!} onEnded={()=>setPublishReady(true)} style={{width:"100%",maxWidth:720}} /><p>Watch the finished video, then publish this version to the project owner. Alternate takes remain in production.</p><Button disabled={!publishReady || published || busy} onClick={async()=>{setBusy(true);try{await request(`/production/projects/${editorProject}/publish`,{method:"POST",body:JSON.stringify({job_id:film.id,preview_confirmed:true})});setPublished(true);setNotice("Finished video published to the project owner.");}catch(e){setError(e instanceof Error?e.message:"Unable to publish");}finally{setBusy(false);}}}>{published?"Published to owner":"Publish to owner"}</Button></section>}
       {selected && !production && !error && (
         <p role="status">Loading saved screenplay…</p>
       )}
@@ -700,6 +727,7 @@ export default function CinemaStudio({
               previous={production.units[index - 1]}
               production={production}
               consent={consent}
+              onConsentChange={setConsent}
               busy={busy}
               action={action}
               onDraftChange={() => draftEdits.current.add(unit.id)}
@@ -708,6 +736,7 @@ export default function CinemaStudio({
           {production.all_approved && (
             <section className="panel">
               <h2>All clips approved</h2>
+              {editorProject && <div><p>Downloading saves files to your computer. Share them here to make them visible in the owner’s biography.</p><Button disabled={busy} onClick={async()=>{setBusy(true);setError('');try{const result=await request<{count:number}>(`/production/projects/${editorProject}/publish-clips`,post({production_id:production.id}));setNotice(`${result.count} approved clips are now visible to the owner under Videos from your Editor.`);}catch(e){setError(e instanceof Error?e.message:'Unable to share clips');}finally{setBusy(false);}}}>Share approved clips with owner</Button></div>}
               <p>
                 Save the approved collection and download it to your computer.
               </p>

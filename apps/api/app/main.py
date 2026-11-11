@@ -33,6 +33,7 @@ from .schemas import (
     UserRead,
 )
 from .services import auth, media, projects
+from .services import production_context as production
 from .storage import ObjectStorage, get_storage
 
 app = FastAPI(title="AI Biographer API", version="0.2.0")
@@ -80,8 +81,37 @@ def token(credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(se
     return credentials.credentials
 
 
-def current_user(db: DB, bearer: Annotated[str, Depends(token)]) -> User:
-    return auth.authenticate(db, bearer)
+def current_user(request: Request, db: DB, bearer: Annotated[str, Depends(token)], interviews: Annotated[Session, Depends(get_interview_db)]) -> User:
+    user = auth.authenticate(db, bearer)
+    if settings.film_studios_editor_only and not user.production_editor and (
+        request.url.path == "/api/cinema" or request.url.path.startswith("/api/cinema/")
+        or request.url.path == "/api/interviews/screenplays" or request.url.path.startswith("/api/interviews/screenplays/")
+    ):
+        raise DomainError(403, "Screenplay Editor and Cinema Studio are available to Production Editors")
+    for attribute in ("production_project_id", "production_owner_id", "workspace_project_id"):
+        if hasattr(user, attribute):
+            delattr(user, attribute)
+    workspace = request.headers.get("X-Workspace-Project")
+    if workspace:
+        production.strict_owner(db, workspace, user)
+        user.workspace_project_id = workspace
+    selected = request.headers.get("X-Production-Project")
+    if selected and workspace:
+        raise DomainError(400, "Choose one project workspace")
+    if selected:
+        if not user.production_editor:
+            raise DomainError(403, "Production editor access required")
+        if not db.get(Project, selected):
+            raise DomainError(404, "Project not found")
+        user.production_project_id = selected
+        user.production_owner_id = production.project_owner(db, selected)
+        # Destructive removal of originals and account-level operations are not production editing.
+        if request.method == "DELETE":
+            raise DomainError(403, "Production editors keep prior versions; deleting originals is owner-only")
+        if request.method not in {"GET", "HEAD"} and not request.url.path.startswith("/api/production"):
+            from .production_routes import checkpoint
+            checkpoint(db, interviews, user, request.method + " " + request.url.path)
+    return user
 
 
 Actor = Annotated[User, Depends(current_user)]
@@ -119,6 +149,8 @@ def logout(db: DB, bearer: Annotated[str, Depends(token)]) -> Response:
 
 @app.post("/api/projects", response_model=ProjectRead, status_code=201)
 def create_project(body: ProjectCreate, db: DB, user: Actor) -> ProjectRead:
+    if production.scope(user) or getattr(user, "workspace_project_id", None):
+        raise DomainError(403, "Exit the selected workspace before creating another biography")
     return projects.create(db, user, body)
 
 
@@ -126,6 +158,10 @@ def create_project(body: ProjectCreate, db: DB, user: Actor) -> ProjectRead:
 def list_projects(
     db: DB, user: Actor, offset: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=100)
 ) -> list:
+    if production.scope(user):
+        return [projects.present(db, db.get(Project, production.scope(user)), "PRODUCTION_EDITOR")]
+    if getattr(user, "workspace_project_id", None):
+        return [projects.present(db, db.get(Project, user.workspace_project_id), "OWNER")]
     rows = db.execute(
         select(Project, ProjectMember.role)
         .join(ProjectMember)
@@ -176,6 +212,7 @@ def delete_project(
     project_id: str, db: DB, user: Actor, interviews: Annotated[Session, Depends(get_interview_db)]
 ) -> Response:
     project, _ = projects.access(db, project_id, user, owner=True)
+    production.strict_owner(db, project_id, user)
     if db.scalar(select(func.count()).select_from(MediaAsset).where(MediaAsset.project_id == project_id)):
         raise DomainError(409, "Delete the project's media before deleting the project")
     if db.scalar(select(InterviewerProfile.id).where(InterviewerProfile.project_id == project_id)):
@@ -186,6 +223,9 @@ def delete_project(
 
     if interviews.scalar(select(Screenplay.id).where(Screenplay.project_id == project_id)):
         raise DomainError(409, "Delete this project's screenplays before deleting the project")
+    from .models import ProductionRevision, ProductionRelease
+    db.query(ProductionRelease).filter(ProductionRelease.project_id == project_id).delete()
+    db.query(ProductionRevision).filter(ProductionRevision.project_id == project_id).delete()
     db.query(AuditEvent).filter(AuditEvent.project_id == project_id).delete()
     db.delete(project)
     db.commit()
@@ -195,6 +235,7 @@ def delete_project(
 @app.post("/api/projects/{project_id}/members", status_code=204)
 def add_member(project_id: str, body: MemberCreate, db: DB, user: Actor) -> Response:
     project, _ = projects.access(db, project_id, user, owner=True)
+    production.strict_owner(db, project_id, user)
     projects.add_member(db, project, user, body)
     return Response(status_code=204)
 
@@ -324,3 +365,6 @@ if settings.enable_film_studios:
 from .photo_routes import router as photo_router  # noqa: E402
 
 app.include_router(photo_router)
+
+from .production_routes import router as production_router
+app.include_router(production_router)

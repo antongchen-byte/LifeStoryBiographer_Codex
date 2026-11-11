@@ -1,3 +1,4 @@
+from .services import production_context as production
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
@@ -6,6 +7,7 @@ from .domain.errors import DomainError
 from .main import DB, Actor, Storage
 from .models import (
     InterviewerProfile,
+    Project,
     StyleJob,
     StylePattern,
     StyleVersion,
@@ -32,7 +34,7 @@ def profiles(db: DB, user: Actor):
         {"id": p.id, "name": p.name, "project_id": p.project_id, "description": p.description}
         for p in db.scalars(
             select(InterviewerProfile)
-            .where(InterviewerProfile.owner_id == user.id)
+            .where(InterviewerProfile.owner_id == production.owner_id(user), InterviewerProfile.project_id.in_(production.project_ids(db, user)))
             .order_by(InterviewerProfile.created_at.desc())
         )
     ]
@@ -41,10 +43,27 @@ def profiles(db: DB, user: Actor):
 @router.post("/profiles", status_code=201)
 def create_profile(body: ProfileCreate, db: DB, user: Actor):
     projects.access(db, body.project_id, user, owner=True)
-    p = InterviewerProfile(owner_id=user.id, **body.model_dump())
+    p = InterviewerProfile(owner_id=production.owner_id(user), **body.model_dump())
     db.add(p)
     db.flush()
     projects.audit(db, p.project_id, user.id, "style.profile_created", p.id)
+    db.commit()
+    return style.details(db, p)
+
+
+@router.post("/projects/{project_id}/transcription-profile")
+def transcription_profile(project_id: str, db: DB, user: Actor):
+    project, _ = projects.access(db, project_id, user, owner=True)
+    db.execute(select(Project).where(Project.id == project_id).with_for_update()).scalar_one()
+    p = db.scalar(select(InterviewerProfile).where(
+        InterviewerProfile.project_id == project_id, InterviewerProfile.owner_id == production.owner_id(user)
+    ).order_by(InterviewerProfile.created_at))
+    if p is None:
+        p = InterviewerProfile(project_id=project_id, owner_id=production.owner_id(user),
+            name="Biography recordings", description="Transcripts of uploaded biography materials")
+        db.add(p)
+        db.flush()
+        projects.audit(db, project_id, user.id, "style.profile_created", p.id)
     db.commit()
     return style.details(db, p)
 

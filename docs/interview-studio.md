@@ -1,5 +1,8 @@
 # Interview Studio
 
+Configure interviewers in **Style Lab**. Convert source recordings and approve their scripts inside **My Biographies → Recording scripts**. Interview Studio is dedicated to conducting, reviewing, approving and saving interviews.
+
+
 Interview Studio creates an AI interviewer and records new interviews separately from the Style Lab reference library. Open `/interview-studio` from the sidebar after signing in. You must own the selected biography workspace.
 
 ## Configure and start
@@ -9,9 +12,9 @@ Ember defaults to calm and reflective, Maya to warm and curious, and Eli to thou
 
 2. Select a genre: life story, oral history, reflective, documentary, or career. This provides the default approach even without reference files.
 3. Optionally upload multiple TXT, Markdown, PDF, or DOCX templates through the media library. Wait for processing to finish, then select the ready templates. Scanned PDFs need a text layer; this feature does not perform OCR. Each template is limited to 20 MiB and 300,000 extracted characters. Select up to 12 templates and 12 script/role pairs, totaling at most 1.5 million characters.
-4. Search your saved, approved Style Lab scripts by filename or transcript content. Select each desired script and its role (normally interviewer). Only that role's turns enter the configuration. Scripts appear after approval and local-save acknowledgement in Style Lab.
+4. Search your saved, approved biography recording scripts by filename or transcript content. Select each desired script and its role (normally interviewer). Only that role's turns enter the configuration. Scripts appear after approval and local-save acknowledgement in My Biographies.
 5. Save the configuration. A Markdown file downloads with the use-case ID and avatar ID in its filename and contents. The same immutable file remains available for download from the saved configuration. Creating a revised interviewer produces a new configuration; existing sessions retain their original one.
-6. Choose the saved configuration, enter an interview title, acknowledge sending selected references and conversation content to Gemini, then start. The app navigates to `/interview-studio/{session-id}`, a dedicated conversation page with the avatar on one side and an automatically scrolling transcript on the other. The conversation opens with a saved greeting and first question based on the avatar and genre. The active avatar animates gently while waiting; spoken playback is attempted automatically. When the opening finishes, voice mode requests microphone access and starts listening; allow the browser microphone prompt. The page brings the Your turn controls into view. If speech generation or microphone access fails, text input remains available. Pause voice mode to type instead.
+6. In Style Lab, choose the saved configuration and click **Proceed to Interview Studio**. There, enter an interview title, acknowledge sending selected references and conversation content to Gemini, then start. Starting an interview reveals the conversation inline on the current Interview Studio page, with the animated avatar on one side and an automatically scrolling transcript on the other. Saved-session links and the separate review page remain available. The conversation opens with a saved greeting and first question based on the avatar and genre. The active avatar animates gently while waiting; spoken playback is attempted automatically. When the opening finishes, voice mode requests microphone access and starts listening; allow the browser microphone prompt. The page brings the Your turn controls into view. If speech generation or microphone access fails, text input remains available. Pause voice mode to type instead.
 
 Reference text is used as in-context examples and lexical RAG chunks, with source metadata and role attribution. It does not fine-tune a model. Retrieved references shown beneath a reply indicate which supplied chunks the model cited; they do not prove factual correctness. Reference participants' experiences must not become facts about the new interviewee.
 

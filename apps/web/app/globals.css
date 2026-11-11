@@ -2416,3 +2416,17 @@ progress {
 .template-library .search-wrap { width: 100%; }
 .template-library .empty-state { padding: 20px; }
 .template-library .empty-state > svg { display: none; }
+
+.editor-version-badge {
+  display: inline-block;
+  padding: .2rem .65rem;
+  border: 1px solid #a5b8b0;
+  border-radius: 999px;
+  background: #eaf2ed;
+  color: #244b39;
+  font-size: .8rem;
+  line-height: 1.5;
+}
+
+.editor-versions-entry { border: 2px solid #637b70; border-radius: 12px; padding: 1.25rem; margin: 1rem 0 1.5rem; background: #edf3ef; }
+.editor-version-card { border: 1px solid #b5c5ba; border-left: 5px solid #637b70; border-radius: 8px; padding: 1.25rem; margin: 1.25rem 0; background: #f7faf8; }

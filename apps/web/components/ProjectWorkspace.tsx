@@ -5,6 +5,10 @@ import { useRef, useState, type FormEvent } from "react";
 import { ArrowLeft, Settings2, Images, X } from "lucide-react";
 import { Project, request } from "../lib/api";
 import MediaLibrary from "./MediaLibrary";
+import ProductionProjectContent from "./ProductionProjectContent";
+import ProductionReviews from "./ProductionReviews";
+import ProductionReleases from "./ProductionReleases";
+import BiographyRecordings from "./BiographyRecordings";
 import BiographyDescription from "./BiographyDescription";
 import { Button } from "./ui/button";
 export default function ProjectWorkspace({ id }: { id: string }) {
@@ -67,6 +71,10 @@ export default function ProjectWorkspace({ id }: { id: string }) {
           </Button>
         )}
       </div>
+      {project.role === "PRODUCTION_EDITOR" && <ProductionProjectContent projectId={id} />}
+      {["OWNER", "PRODUCTION_EDITOR"].includes(project.role) && <ProductionReviews projectId={id} />}
+      <ProductionReleases projectId={id} />
+      {project.role === "OWNER" && <p><strong>Your working biography</strong> · The content below is your working version.</p>}
       <BiographyDescription key={id} project={project} />
       <div className="workspace-tabs">
         <span>
@@ -76,6 +84,7 @@ export default function ProjectWorkspace({ id }: { id: string }) {
         <small>{project.role.toLowerCase()} access</small>
       </div>
       <MediaLibrary projectId={id} readOnly={project.role === "VIEWER"} />
+      {["OWNER","PRODUCTION_EDITOR"].includes(project.role) && <BiographyRecordings projectId={id} />}
       <dialog className="modal" ref={dialog}>
         <div className="modal-heading">
           <h2>Project settings</h2>

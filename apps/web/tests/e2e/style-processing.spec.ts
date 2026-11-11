@@ -45,6 +45,7 @@ test("uploaded recording has start action, saved progress, and a transcript dest
           },
         ],
       });
+    if (path === "/projects/project") return r.fulfill({json:{id:"project",title:"Biography",subject_name:"Test",role:"OWNER",description:null,media_count:1}});
     if (path === "/projects")
       return r.fulfill({
         json: [
@@ -155,7 +156,7 @@ test("uploaded recording has start action, saved progress, and a transcript dest
       json: { detail: "Unexpected fixture endpoint" },
     });
   });
-  await page.goto("/style-lab");
+  await page.goto("/projects/project");
   const card = page.locator(".style-recording-action");
   await expect(
     card.getByRole("button", { name: "Create transcript", exact: true }),
@@ -226,7 +227,7 @@ test("uploaded recording has start action, saved progress, and a transcript dest
     ),
   ).toBe(true);
   await page
-    .getByRole("link", { name: "Back to Style Lab", exact: false })
+    .getByRole("link", { name: "Back to biography recordings", exact: false })
     .click();
   const deleteProcessing = page.getByRole("button", {
     name: "Delete processing & script",

@@ -181,19 +181,19 @@ export default function TranscriptReview({
     return (
       <div className="page">
         <p role="alert">{profile.error.message}</p>
-        <Link href="/style-lab">Back to Style Lab</Link>
+        <Link href="/">Back to My Biographies</Link>
       </div>
     );
   if (!profile.data) return <div className="page">Loading script…</div>;
   if (!source)
     return (
       <div className="page">
-        Recording not found. <Link href="/style-lab">Back to Style Lab</Link>
+        Recording not found. <Link href="/">Back to My Biographies</Link>
       </div>
     );
   return (
     <div className="page style-lab">
-      <Link href="/style-lab">← Back to Style Lab</Link>
+      <Link href={`/projects/${profile.data.project_id}#recording-scripts`}>← Back to biography recordings</Link>
       <header className="page-heading">
         <div>
           <p className="eyebrow">SCRIPT REVIEW</p>
@@ -238,7 +238,7 @@ export default function TranscriptReview({
               });
               setPreview(null);
               setSelected([]);
-            }, "Script and processing history deleted. The recording is retained; return to Style Lab to create a new transcript.");
+            }, "Script and processing history deleted. The recording is retained; return to biography recordings to create a new transcript.");
           }}
         >
           Delete script
@@ -285,6 +285,7 @@ export default function TranscriptReview({
       </section>
       <section className="style-panel">
         <h2>Approved versions</h2>
+        {archives.data?.some(a => a.saved_at) && <p><Link href="/style-lab">Use saved scripts to configure an interviewer in Style Lab →</Link></p>}
         <p>
           Edits create a new revision. Previous approved copies remain
           unchanged.
